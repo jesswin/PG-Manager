@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
 import { useOnboarding } from "@/store/OnboardingContext";
 import { supabase, isSupabaseEnabled } from "@/lib/supabase";
+import { isDemoMode, DEMO_PG_ID } from "@/lib/demo";
 import {
   tenants as seedTenants,
   rooms as seedRooms,
@@ -141,6 +142,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!activePgId) return;
 
+    // Demo mode: always use seed data — never query Supabase with the fake pg_demo ID
+    if (isDemoMode() || activePgId === DEMO_PG_ID) {
+      setTenants(DEMO_STATE.tenants);
+      setRooms(DEMO_STATE.rooms);
+      setPayments(DEMO_STATE.payments);
+      setNotices(DEMO_STATE.notices);
+      setActivity(DEMO_STATE.activity);
+      return;
+    }
+
     if (isSupabaseEnabled && supabase) {
       setLoading(true);
       loadFromSupabase(activePgId);
@@ -164,6 +175,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotices((n.data ?? []).map(mapNotice));
     setActivity([]);
     setLoading(false);
+  }
+
+  /** Returns the supabase client only when writes should happen; null in demo/local mode. */
+  function getSb() {
+    if (isDemoMode() || !supabase || pgIdRef.current === DEMO_PG_ID) return null;
+    return supabase;
   }
 
   function loadFromLocalStorage(pgId: string) {
@@ -205,8 +222,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const id = `t${Date.now()}`;
     const tenant: Tenant = { ...data, id, avatar };
 
-    if (supabase && pgId) {
-      await supabase.from("tenants").insert({
+    const sb = getSb(); if (sb) {
+      await sb.from("tenants").insert({
         id, pg_id: pgId, name: data.name, phone: data.phone, email: data.email,
         room_number: data.roomNumber, rent_amount: data.rentAmount, move_in_date: data.moveInDate,
         payment_status: data.paymentStatus, avatar,
@@ -216,7 +233,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         security_deposit: data.securityDeposit, advance_paid: data.advancePaid,
         food_preference: data.foodPreference, amenities: data.amenities, notes: data.notes,
       });
-      await supabase.from("rooms").update({ status: "Occupied", tenant_id: id, tenant_name: data.name })
+      await sb.from("rooms").update({ status: "Occupied", tenant_id: id, tenant_name: data.name })
         .eq("pg_id", pgId).eq("number", data.roomNumber);
     }
 
@@ -229,7 +246,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const editTenant = useCallback(async (id: string, data: Partial<Tenant>) => {
     const pgId = pgIdRef.current;
-    if (supabase && pgId) {
+    const sb = getSb(); if (sb) {
       const update: Record<string, unknown> = {};
       if (data.name)          update.name = data.name;
       if (data.phone)         update.phone = data.phone;
@@ -242,7 +259,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (data.amenities)     update.amenities = data.amenities;
       if (data.foodPreference) update.food_preference = data.foodPreference;
       if (data.securityDeposit !== undefined) update.security_deposit = data.securityDeposit;
-      await supabase.from("tenants").update(update).eq("id", id);
+      await sb.from("tenants").update(update).eq("id", id);
     }
     setTenants((prev) => prev.map((t) => {
       if (t.id !== id) return t;
@@ -255,10 +272,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const deleteTenant = useCallback(async (id: string) => {
     const pgId = pgIdRef.current;
     const t = tenants.find((x) => x.id === id);
-    if (supabase && pgId) {
-      await supabase.from("tenants").delete().eq("id", id);
+    const sb = getSb(); if (sb) {
+      await sb.from("tenants").delete().eq("id", id);
       if (t) {
-        await supabase.from("rooms").update({ status: "Vacant", tenant_id: null, tenant_name: null })
+        await sb.from("rooms").update({ status: "Vacant", tenant_id: null, tenant_name: null })
           .eq("pg_id", pgId).eq("number", t.roomNumber);
       }
     }
@@ -275,8 +292,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const pgId = pgIdRef.current;
     const id = `r${data.number}`;
     const room: Room = { ...data, id, status: "Vacant" };
-    if (supabase && pgId) {
-      await supabase.from("rooms").insert({
+    const sb = getSb(); if (sb) {
+      await sb.from("rooms").insert({
         id, pg_id: pgId, number: data.number, floor: data.floor,
         type: data.type, status: "Vacant", rent_amount: data.rentAmount, amenities: data.amenities,
       });
@@ -285,19 +302,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const editRoom = useCallback(async (id: string, data: Partial<Room>) => {
-    if (supabase) {
+    const sb = getSb(); if (sb) {
       const update: Record<string, unknown> = {};
       if (data.rentAmount) update.rent_amount = data.rentAmount;
       if (data.amenities)  update.amenities   = data.amenities;
       if (data.type)       update.type        = data.type;
-      await supabase.from("rooms").update(update).eq("id", id);
+      await sb.from("rooms").update(update).eq("id", id);
     }
     setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, ...data } : r)));
   }, []);
 
   const markRoomVacant = useCallback(async (id: string) => {
-    if (supabase) {
-      await supabase.from("rooms").update({ status: "Vacant", tenant_id: null, tenant_name: null }).eq("id", id);
+    const sb = getSb(); if (sb) {
+      await sb.from("rooms").update({ status: "Vacant", tenant_id: null, tenant_name: null }).eq("id", id);
     }
     setRooms((prev) => prev.map((r) =>
       r.id === id ? { ...r, status: "Vacant", tenantId: undefined, tenantName: undefined } : r
@@ -310,14 +327,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const pgId = pgIdRef.current;
     const id = `p${Date.now()}`;
     const payment: Payment = { ...data, id };
-    if (supabase && pgId) {
-      await supabase.from("payments").insert({
+    const sb = getSb(); if (sb) {
+      await sb.from("payments").insert({
         id, pg_id: pgId, tenant_id: data.tenantId, tenant_name: data.tenantName,
         room_number: data.roomNumber, amount: data.amount, due_date: data.dueDate,
         paid_date: data.paidDate ?? null, status: data.status, month: data.month,
       });
       if (data.status === "Paid") {
-        await supabase.from("tenants").update({ payment_status: "Paid" }).eq("id", data.tenantId);
+        await sb.from("tenants").update({ payment_status: "Paid" }).eq("id", data.tenantId);
       }
     }
     setPayments((prev) => [payment, ...prev]);
@@ -330,9 +347,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const markPaymentPaid = useCallback(async (id: string) => {
     const paidDate = new Date().toISOString().split("T")[0];
     const p = payments.find((x) => x.id === id);
-    if (supabase) {
-      await supabase.from("payments").update({ status: "Paid", paid_date: paidDate }).eq("id", id);
-      if (p) await supabase.from("tenants").update({ payment_status: "Paid" }).eq("id", p.tenantId);
+    const sb = getSb(); if (sb) {
+      await sb.from("payments").update({ status: "Paid", paid_date: paidDate }).eq("id", id);
+      if (p) await sb.from("tenants").update({ payment_status: "Paid" }).eq("id", p.tenantId);
     }
     setPayments((prev) => prev.map((x) => x.id === id ? { ...x, status: "Paid", paidDate } : x));
     if (p) {
@@ -346,8 +363,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addNotice = useCallback(async (data: Omit<Notice, "id">) => {
     const pgId = pgIdRef.current;
     const id = `n${Date.now()}`;
-    if (supabase && pgId) {
-      await supabase.from("notices").insert({
+    const sb = getSb(); if (sb) {
+      await sb.from("notices").insert({
         id, pg_id: pgId, title: data.title, message: data.message,
         recipient: data.recipient, recipient_id: data.recipientId ?? null,
         status: data.status, created_at: data.createdAt, sent_at: data.sentAt ?? null,
@@ -360,15 +377,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const sendDraft = useCallback(async (id: string) => {
     const now = new Date().toISOString().split("T")[0];
     const n = notices.find((x) => x.id === id);
-    if (supabase) {
-      await supabase.from("notices").update({ status: "Sent", sent_at: now }).eq("id", id);
+    const sb = getSb(); if (sb) {
+      await sb.from("notices").update({ status: "Sent", sent_at: now }).eq("id", id);
     }
     setNotices((prev) => prev.map((x) => x.id === id ? { ...x, status: "Sent" as const, sentAt: now } : x));
     if (n) pushActivity("notice", `Notice sent: ${n.title}`);
   }, [notices]);
 
   const deleteNotice = useCallback(async (id: string) => {
-    if (supabase) await supabase.from("notices").delete().eq("id", id);
+    const sb = getSb(); if (sb) await sb.from("notices").delete().eq("id", id);
     setNotices((prev) => prev.filter((x) => x.id !== id));
   }, []);
 
