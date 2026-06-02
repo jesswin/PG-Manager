@@ -32,12 +32,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!bothHydrated) return;
     if (isFullscreen) return;
-    if (!hasPassword && !isOnboarded) {
-      router.push("/onboarding");
-    } else if (hasPassword && !isAuthenticated) {
-      router.push("/login");
+    // All unauthenticated visitors — new or returning — land on the demo/landing page.
+    // From there they choose "Get Started" (onboarding) or "Sign In" (login).
+    if (!isAuthenticated && !demoMode) {
+      router.push("/demo");
     }
-  }, [bothHydrated, hasPassword, isAuthenticated, isOnboarded, isFullscreen, router]);
+  }, [bothHydrated, isAuthenticated, demoMode, isFullscreen, router]);
 
   const { isEmailConfigured, isSmsConfigured } = useSettings();
   const notifyResult = useAutoNotify(
@@ -74,8 +74,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return <main className="h-full overflow-y-auto">{children}</main>;
   }
 
-  if (!hasPassword && !isOnboarded) return null;
-  if (hasPassword && !isAuthenticated) return null;
+  // Don't render the dashboard while redirecting to /demo
+  if (!isAuthenticated && !demoMode) return null;
 
   return (
     <div className="flex flex-col h-full">
