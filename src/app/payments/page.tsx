@@ -14,9 +14,11 @@ import UpgradeModal from "@/components/UpgradeModal";
 import { useSettings } from "@/store/SettingsContext";
 import { openRazorpayCheckout } from "@/lib/razorpay";
 import Link from "next/link";
+import { getRecentMonths, getCurrentMonthLabel, getPreviousMonthLabel, monthLabelToDueDate } from "@/lib/months";
 
 const inp = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-800 placeholder:text-gray-400";
-const ALL_MONTHS = ["All Months", "June 2025", "May 2025", "April 2025", "March 2025"];
+const RECENT_MONTHS = getRecentMonths(8);
+const ALL_MONTHS = ["All Months", ...RECENT_MONTHS];
 const PAGE_SIZE = 10;
 
 export default function PaymentsPage() {
@@ -28,11 +30,14 @@ export default function PaymentsPage() {
   const [collectingId, setCollectingId] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
-  const [monthFilter, setMonthFilter] = useState("May 2025");
+  const [monthFilter, setMonthFilter] = useState(getPreviousMonthLabel);
   const [statusFilter, setStatusFilter] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [page, setPage] = useState(1);
-  const [form, setForm] = useState({ tenantId: "", amount: "", month: "June 2025", dueDate: "2025-06-05", paidDate: new Date().toISOString().split("T")[0], status: "Paid" as PaymentStatus });
+  const [form, setForm] = useState(() => {
+    const curMonth = getCurrentMonthLabel();
+    return { tenantId: "", amount: "", month: curMonth, dueDate: monthLabelToDueDate(curMonth), paidDate: new Date().toISOString().split("T")[0], status: "Paid" as PaymentStatus };
+  });
 
   const selectedTenant = tenants.find((t) => t.id === form.tenantId);
 
@@ -57,7 +62,7 @@ export default function PaymentsPage() {
     if (p) addToast(`${p.tenantName}'s payment for ${p.month} marked as Paid.`);
   }
 
-  function handleAddPayment(e: React.FormEvent) {
+  function handleAddPayment(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!selectedTenant) return;
     addPayment({
@@ -66,7 +71,8 @@ export default function PaymentsPage() {
       paidDate: form.status === "Paid" ? form.paidDate : undefined, status: form.status,
     });
     setShowModal(false);
-    setForm({ tenantId: "", amount: "", month: "June 2025", dueDate: "2025-06-05", paidDate: new Date().toISOString().split("T")[0], status: "Paid" });
+    const curMonth = getCurrentMonthLabel();
+    setForm({ tenantId: "", amount: "", month: curMonth, dueDate: monthLabelToDueDate(curMonth), paidDate: new Date().toISOString().split("T")[0], status: "Paid" });
     addToast(`Payment of ₹${Number(form.amount).toLocaleString("en-IN")} recorded for ${selectedTenant.name}.`);
     setPage(1);
   }
@@ -341,8 +347,8 @@ export default function PaymentsPage() {
           )}
           <div className="grid grid-cols-2 gap-4">
             <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Month *</label>
-              <select required className={inp} value={form.month} onChange={(e) => setForm({ ...form, month: e.target.value })}>
-                {["June 2025", "May 2025", "April 2025", "March 2025"].map((m) => <option key={m}>{m}</option>)}
+              <select required className={inp} value={form.month} onChange={(e) => setForm({ ...form, month: e.target.value, dueDate: monthLabelToDueDate(e.target.value) })}>
+                {RECENT_MONTHS.map((m) => <option key={m}>{m}</option>)}
               </select></div>
             <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Amount (₹) *</label>
               <input required type="number" className={inp} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="8500" min={0} /></div>

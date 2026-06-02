@@ -57,7 +57,7 @@ export default function RoomsPage() {
     setForm((prev) => ({ ...prev, amenities: prev.amenities.includes(a) ? prev.amenities.filter((x) => x !== a) : [...prev.amenities, a] }));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (editTarget) {
       editRoom(editTarget.id, { number: form.number, floor: Number(form.floor), type: form.type, rentAmount: Number(form.rentAmount), amenities: form.amenities });

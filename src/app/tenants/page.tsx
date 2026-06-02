@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useApp } from "@/store/AppContext";
 import { Tenant, PaymentStatus } from "@/data/mock";
 import StatusBadge from "@/components/StatusBadge";
@@ -10,6 +11,7 @@ import { ToastContainer, useToast } from "@/components/Toast";
 import Link from "next/link";
 import { Search, UserPlus, Eye, Pencil, Trash2, ChevronDown, X, MessageCircle, Lock } from "lucide-react";
 import { whatsappUrl, rentReminderMessage } from "@/lib/whatsapp";
+import { getCurrentMonthLabel } from "@/lib/months";
 import { usePlan } from "@/store/PlanContext";
 import UpgradeModal from "@/components/UpgradeModal";
 
@@ -27,8 +29,14 @@ export default function TenantsPage() {
   const { toasts, addToast, dismiss } = useToast();
   const { can, withinLimit, plan } = usePlan();
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string; plan: "monthly" | "quarterly" }>({ open: false, feature: "", plan: "monthly" });
+  const searchParams = useSearchParams();
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
+
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q !== null) setSearch(q);
+  }, [searchParams]);
   const [statusFilter, setStatusFilter] = useState("All");
   const [showAddModal, setShowAddModal] = useState(false);
   const [editTarget, setEditTarget] = useState<Tenant | null>(null);
@@ -66,7 +74,7 @@ export default function TenantsPage() {
     setEditTarget(t);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (editTarget) {
       editTenant(editTarget.id, { ...form, rentAmount: Number(form.rentAmount) });
@@ -175,7 +183,7 @@ export default function TenantsPage() {
                       </Link>
                       {can("whatsappIndividual") ? (
                         <a
-                          href={whatsappUrl(tenant.phone, rentReminderMessage(tenant.name, tenant.roomNumber, tenant.rentAmount, "June 2025"))}
+                          href={whatsappUrl(tenant.phone, rentReminderMessage(tenant.name, tenant.roomNumber, tenant.rentAmount, getCurrentMonthLabel()))}
                           target="_blank"
                           rel="noopener noreferrer"
                           title={`Send WhatsApp reminder to ${tenant.name}`}

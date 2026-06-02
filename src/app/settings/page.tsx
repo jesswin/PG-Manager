@@ -17,7 +17,7 @@ export default function SettingsPage() {
   const [showSecret, setShowSecret] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  function handleSave(e: React.FormEvent) {
+  function handleSave(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (form.keyId && !form.keyId.startsWith("rzp_")) {
       addToast("Key ID must start with rzp_test_ or rzp_live_", "error");
@@ -25,7 +25,7 @@ export default function SettingsPage() {
     }
     updateRazorpay(form);
     setSaved(true);
-    addToast("Settings saved successfully.", "success" as never);
+    addToast("Settings saved successfully.", "success");
     setTimeout(() => setSaved(false), 3000);
   }
 

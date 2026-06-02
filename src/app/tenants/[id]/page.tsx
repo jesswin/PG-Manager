@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use } from "react";
+import { use, useState } from "react";
 import { useApp } from "@/store/AppContext";
 import { Tenant } from "@/data/mock";
 import { notFound } from "next/navigation";
@@ -16,9 +16,7 @@ import { whatsappUrl, rentReminderMessage } from "@/lib/whatsapp";
 
 const inp = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-800 placeholder:text-gray-400";
 
-interface Props { params: Promise<{ id: string }> }
-
-export default function TenantProfilePage({ params }: Props) {
+export default function TenantProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { tenants, rooms, payments, editTenant } = useApp();
 
@@ -44,7 +42,7 @@ export default function TenantProfilePage({ params }: Props) {
   const totalPaid = tenantPayments.filter((p) => p.status === "Paid").reduce((s, p) => s + p.amount, 0);
   const pendingMonths = tenantPayments.filter((p) => p.status !== "Paid").length;
 
-  function handleSaveEdit(e: React.FormEvent) {
+  function handleSaveEdit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     editTenant(id, { ...form, rentAmount: Number(form.rentAmount) });
     setShowEdit(false);
@@ -56,9 +54,6 @@ export default function TenantProfilePage({ params }: Props) {
     tenant.phone,
     rentReminderMessage(tenant.name, tenant.roomNumber, tenant.rentAmount, pendingPayment?.month ?? "this month", pendingPayment?.dueDate)
   );
-
-  // sync form when tenant changes in context
-  const syncedForm = { ...form };
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto">

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useApp } from "@/store/AppContext";
-import { rooms as seedRooms, Tenant, PaymentStatus } from "@/data/mock";
+import { Tenant, PaymentStatus } from "@/data/mock";
 import StatusBadge from "@/components/StatusBadge";
 import Modal from "@/components/Modal";
 import { ToastContainer, useToast } from "@/components/Toast";
@@ -15,6 +15,10 @@ import { whatsappUrl, rentReminderWithLink, rentReminderMessage } from "@/lib/wh
 import { usePlan } from "@/store/PlanContext";
 import UpgradeModal from "@/components/UpgradeModal";
 import { useSettings } from "@/store/SettingsContext";
+import { useOnboarding } from "@/store/OnboardingContext";
+import { getRecentMonths, getCurrentMonthLabel, getPreviousMonthLabel, monthLabelToDueDate } from "@/lib/months";
+
+const RECENT_MONTHS = getRecentMonths(8);
 
 const inp = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-800 placeholder:text-gray-400";
 
@@ -33,6 +37,7 @@ export default function DashboardPage() {
 
   const { can } = usePlan();
   const { razorpay, isRazorpayConfigured } = useSettings();
+  const { owner, activePg } = useOnboarding();
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string; plan: "monthly" | "quarterly" }>({ open: false, feature: "", plan: "monthly" });
   const [autoSendDismissed, setAutoSendDismissed] = useState(false);
   const [autoSendReady, setAutoSendReady] = useState(false);
@@ -49,7 +54,7 @@ export default function DashboardPage() {
   const [tenantForm, setTenantForm] = useState({ ...EMPTY_TENANT });
   const [paymentTenantId, setPaymentTenantId] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentMonth, setPaymentMonth] = useState("June 2025");
+  const [paymentMonth, setPaymentMonth] = useState(getCurrentMonthLabel);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("Paid");
   const [noticeForm, setNoticeForm] = useState({ ...EMPTY_NOTICE });
 
@@ -58,7 +63,8 @@ export default function DashboardPage() {
   const occupiedRooms = rooms.filter((r) => r.status === "Occupied").length;
   const occupancyRate = totalRooms ? Math.round((occupiedRooms / totalRooms) * 100) : 0;
 
-  const currentMonthPayments = payments.filter((p) => p.month === "May 2025");
+  const prevMonth = getPreviousMonthLabel();
+  const currentMonthPayments = payments.filter((p) => p.month === prevMonth);
   const pendingAmount = currentMonthPayments
     .filter((p) => p.status !== "Paid")
     .reduce((sum, p) => sum + (p.status === "Unpaid" ? p.amount : Math.round(p.amount / 2)), 0);
@@ -70,7 +76,7 @@ export default function DashboardPage() {
     { label: "Total Tenants", value: totalTenants, sub: `${occupiedRooms} rooms occupied`, icon: Users, color: "text-indigo-600", bg: "bg-indigo-50", trend: "+2 this month", trendUp: true },
     { label: "Total Rooms", value: totalRooms, sub: `${totalRooms - occupiedRooms} vacant`, icon: DoorOpen, color: "text-purple-600", bg: "bg-purple-50", trend: "3 floors", trendNull: true },
     { label: "Occupancy Rate", value: `${occupancyRate}%`, sub: `${occupiedRooms} of ${totalRooms} rooms`, icon: TrendingUp, color: "text-emerald-600", bg: "bg-emerald-50", trend: "+5% vs last month", trendUp: true },
-    { label: "Pending Rent", value: `₹${pendingAmount.toLocaleString("en-IN")}`, sub: "May 2025", icon: AlertCircle, color: "text-red-500", bg: "bg-red-50", trend: `₹${collectedAmount.toLocaleString("en-IN")} collected`, trendUp: false },
+    { label: "Pending Rent", value: `₹${pendingAmount.toLocaleString("en-IN")}`, sub: prevMonth, icon: AlertCircle, color: "text-red-500", bg: "bg-red-50", trend: `₹${collectedAmount.toLocaleString("en-IN")} collected`, trendUp: false },
   ];
 
   const vacantRooms = rooms.filter((r) => r.status === "Vacant");
@@ -130,7 +136,7 @@ export default function DashboardPage() {
     setAutoSendDismissed(true);
   }
 
-  function handleAddTenant(e: React.FormEvent) {
+  function handleAddTenant(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     addTenant({ ...tenantForm, rentAmount: Number(tenantForm.rentAmount) });
     setModal(null);
@@ -138,14 +144,14 @@ export default function DashboardPage() {
     addToast(`${tenantForm.name} added as a new tenant.`);
   }
 
-  function handleAddPayment(e: React.FormEvent) {
+  function handleAddPayment(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     const t = tenants.find((x) => x.id === paymentTenantId);
     if (!t) return;
     addPayment({
       tenantId: t.id, tenantName: t.name, roomNumber: t.roomNumber,
       amount: Number(paymentAmount), month: paymentMonth,
-      dueDate: `2025-${paymentMonth === "June 2025" ? "06" : "05"}-05`,
+      dueDate: monthLabelToDueDate(paymentMonth),
       paidDate: paymentStatus === "Paid" ? new Date().toISOString().split("T")[0] : undefined,
       status: paymentStatus,
     });
@@ -154,7 +160,7 @@ export default function DashboardPage() {
     addToast(`Payment of ₹${Number(paymentAmount).toLocaleString("en-IN")} recorded for ${t.name}.`);
   }
 
-  function handleSendNotice(e: React.FormEvent) {
+  function handleSendNotice(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     const recipient = noticeForm.recipientId === "all"
       ? "All Tenants"
@@ -178,7 +184,9 @@ export default function DashboardPage() {
 
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 text-sm mt-1">Welcome back, Ramesh. Here&apos;s what&apos;s happening at your PG.</p>
+        <p className="text-gray-500 text-sm mt-1">
+          Welcome back, {owner.name || "there"}. Here&apos;s what&apos;s happening at {activePg?.name || "your PG"}.
+        </p>
       </div>
 
       {/* Stats */}
@@ -456,7 +464,7 @@ export default function DashboardPage() {
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Month *</label>
               <select required className={inp} value={paymentMonth} onChange={(e) => setPaymentMonth(e.target.value)}>
-                {["June 2025", "May 2025", "April 2025", "March 2025"].map((m) => <option key={m}>{m}</option>)}
+                {RECENT_MONTHS.map((m) => <option key={m}>{m}</option>)}
               </select>
             </div>
             <div>

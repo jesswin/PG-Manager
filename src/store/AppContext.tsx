@@ -1,13 +1,14 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
+import { useOnboarding } from "@/store/OnboardingContext";
 import {
   tenants as seedTenants,
   rooms as seedRooms,
   payments as seedPayments,
   notices as seedNotices,
   activityFeed as seedActivity,
-  Tenant, Room, Payment, Notice, PaymentStatus, RoomType,
+  Tenant, Room, Payment, Notice, PaymentStatus,
 } from "@/data/mock";
 
 interface ActivityItem {
@@ -17,7 +18,7 @@ interface ActivityItem {
   time: string;
 }
 
-interface AppState {
+interface PgAppState {
   tenants: Tenant[];
   rooms: Room[];
   payments: Payment[];
@@ -25,150 +26,229 @@ interface AppState {
   activity: ActivityItem[];
 }
 
-interface AppContextType extends AppState {
-  // Tenants
+interface AppContextType extends PgAppState {
   addTenant: (data: Omit<Tenant, "id" | "avatar">) => void;
   editTenant: (id: string, data: Partial<Tenant>) => void;
   deleteTenant: (id: string) => void;
-  // Rooms
   addRoom: (data: Omit<Room, "id" | "status">) => void;
   editRoom: (id: string, data: Partial<Room>) => void;
   markRoomVacant: (id: string) => void;
-  // Payments
   addPayment: (data: Omit<Payment, "id">) => void;
   markPaymentPaid: (id: string) => void;
-  // Notices
   addNotice: (data: Omit<Notice, "id">) => void;
   sendDraft: (id: string) => void;
   deleteNotice: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
+const STORAGE_KEY = "pgm_pg_data";
+
+const EMPTY_STATE: PgAppState = {
+  tenants: [], rooms: [], payments: [], notices: [], activity: [],
+};
+
+const DEMO_STATE: PgAppState = {
+  tenants: seedTenants,
+  rooms: seedRooms,
+  payments: seedPayments,
+  notices: seedNotices,
+  activity: seedActivity.map((a) => ({
+    id: a.id,
+    type: a.type as ActivityItem["type"],
+    message: a.message,
+    time: a.time,
+  })),
+};
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [tenants, setTenants] = useState<Tenant[]>(seedTenants);
-  const [rooms, setRooms] = useState<Room[]>(seedRooms);
-  const [payments, setPayments] = useState<Payment[]>(seedPayments);
-  const [notices, setNotices] = useState<Notice[]>(seedNotices);
-  const [activity, setActivity] = useState<ActivityItem[]>(
-    seedActivity.map((a) => ({ id: a.id, type: a.type as ActivityItem["type"], message: a.message, time: a.time }))
-  );
+  const { activePgId, pgs } = useOnboarding();
+  const [allData, setAllData] = useState<Record<string, PgAppState>>({});
+  const [dataLoaded, setDataLoaded] = useState(false);
 
-  const pushActivity = useCallback((type: ActivityItem["type"], message: string) => {
-    setActivity((prev) => [
-      { id: `a${Date.now()}`, type, message, time: "Just now" },
-      ...prev.slice(0, 9),
-    ]);
+  // Refs so mutation callbacks always see latest values without re-creating
+  const activePgIdRef = useRef(activePgId);
+  const pgsRef = useRef(pgs);
+  useEffect(() => { activePgIdRef.current = activePgId; }, [activePgId]);
+  useEffect(() => { pgsRef.current = pgs; }, [pgs]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data && typeof data === "object") setAllData(data);
+      }
+    } catch { /* ignore */ }
+    setDataLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!dataLoaded) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
+    } catch { /* ignore */ }
+  }, [allData, dataLoaded]);
+
+  // Derive current PG's data: first PG gets demo data, subsequent ones start empty
+  const pgData: PgAppState = (() => {
+    if (!activePgId) return DEMO_STATE;
+    if (allData[activePgId]) return allData[activePgId];
+    const isFirstPg = pgs.length > 0 && pgs[0].id === activePgId;
+    return isFirstPg ? DEMO_STATE : EMPTY_STATE;
+  })();
+
+  // Mutate active PG's state slice; reads activePgId via ref to avoid stale closures
+  const setCurrentData = useCallback((updater: (prev: PgAppState) => PgAppState) => {
+    setAllData((prev) => {
+      const pgId = activePgIdRef.current;
+      if (!pgId) return prev;
+      const existing = prev[pgId];
+      const isFirstPg = pgsRef.current.length > 0 && pgsRef.current[0].id === pgId;
+      const current = existing ?? (isFirstPg ? DEMO_STATE : EMPTY_STATE);
+      return { ...prev, [pgId]: updater(current) };
+    });
   }, []);
 
   // ── Tenants ──────────────────────────────────────────────
   const addTenant = useCallback((data: Omit<Tenant, "id" | "avatar">) => {
     const avatar = data.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
     const tenant: Tenant = { ...data, id: `t${Date.now()}`, avatar };
-    setTenants((prev) => [tenant, ...prev]);
-    // mark room occupied
-    setRooms((prev) =>
-      prev.map((r) =>
+    setCurrentData((prev) => ({
+      ...prev,
+      tenants: [tenant, ...prev.tenants],
+      rooms: prev.rooms.map((r) =>
         r.number === data.roomNumber
-          ? { ...r, status: "Occupied", tenantId: tenant.id, tenantName: data.name }
+          ? { ...r, status: "Occupied" as const, tenantId: tenant.id, tenantName: data.name }
           : r
-      )
-    );
-    pushActivity("tenant", `New tenant ${data.name} moved into Room ${data.roomNumber}`);
-  }, [pushActivity]);
+      ),
+      activity: [
+        { id: `a${Date.now()}`, type: "tenant" as const, message: `New tenant ${data.name} moved into Room ${data.roomNumber}`, time: "Just now" },
+        ...prev.activity.slice(0, 9),
+      ],
+    }));
+  }, [setCurrentData]);
 
   const editTenant = useCallback((id: string, data: Partial<Tenant>) => {
-    setTenants((prev) =>
-      prev.map((t) => {
+    setCurrentData((prev) => ({
+      ...prev,
+      tenants: prev.tenants.map((t) => {
         if (t.id !== id) return t;
         const updated = { ...t, ...data };
         updated.avatar = updated.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
         return updated;
-      })
-    );
-  }, []);
+      }),
+    }));
+  }, [setCurrentData]);
 
   const deleteTenant = useCallback((id: string) => {
-    const t = tenants.find((x) => x.id === id);
-    setTenants((prev) => prev.filter((x) => x.id !== id));
-    setRooms((prev) =>
-      prev.map((r) =>
-        r.tenantId === id ? { ...r, status: "Vacant", tenantId: undefined, tenantName: undefined } : r
-      )
-    );
-    if (t) pushActivity("tenant", `${t.name} was removed from Room ${t.roomNumber}`);
-  }, [tenants, pushActivity]);
+    setCurrentData((prev) => {
+      const t = prev.tenants.find((x) => x.id === id);
+      return {
+        ...prev,
+        tenants: prev.tenants.filter((x) => x.id !== id),
+        rooms: prev.rooms.map((r) =>
+          r.tenantId === id ? { ...r, status: "Vacant" as const, tenantId: undefined, tenantName: undefined } : r
+        ),
+        activity: t
+          ? [{ id: `a${Date.now()}`, type: "tenant" as const, message: `${t.name} was removed from Room ${t.roomNumber}`, time: "Just now" }, ...prev.activity.slice(0, 9)]
+          : prev.activity,
+      };
+    });
+  }, [setCurrentData]);
 
   // ── Rooms ────────────────────────────────────────────────
   const addRoom = useCallback((data: Omit<Room, "id" | "status">) => {
     const room: Room = { ...data, id: `r${data.number}`, status: "Vacant" };
-    setRooms((prev) => [...prev, room].sort((a, b) => a.number.localeCompare(b.number)));
-  }, []);
+    setCurrentData((prev) => ({
+      ...prev,
+      rooms: [...prev.rooms, room].sort((a, b) => a.number.localeCompare(b.number)),
+    }));
+  }, [setCurrentData]);
 
   const editRoom = useCallback((id: string, data: Partial<Room>) => {
-    setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, ...data } : r)));
-  }, []);
+    setCurrentData((prev) => ({
+      ...prev,
+      rooms: prev.rooms.map((r) => (r.id === id ? { ...r, ...data } : r)),
+    }));
+  }, [setCurrentData]);
 
   const markRoomVacant = useCallback((id: string) => {
-    setRooms((prev) =>
-      prev.map((r) =>
-        r.id === id ? { ...r, status: "Vacant", tenantId: undefined, tenantName: undefined } : r
-      )
-    );
-  }, []);
+    setCurrentData((prev) => ({
+      ...prev,
+      rooms: prev.rooms.map((r) =>
+        r.id === id ? { ...r, status: "Vacant" as const, tenantId: undefined, tenantName: undefined } : r
+      ),
+    }));
+  }, [setCurrentData]);
 
   // ── Payments ─────────────────────────────────────────────
   const addPayment = useCallback((data: Omit<Payment, "id">) => {
     const payment: Payment = { ...data, id: `p${Date.now()}` };
-    setPayments((prev) => [payment, ...prev]);
-    if (data.status === "Paid") {
-      pushActivity("payment", `${data.tenantName} paid ₹${data.amount.toLocaleString("en-IN")} for Room ${data.roomNumber}`);
-      // update tenant payment status
-      setTenants((prev) =>
-        prev.map((t) => (t.id === data.tenantId ? { ...t, paymentStatus: "Paid" } : t))
-      );
-    }
-  }, [pushActivity]);
+    setCurrentData((prev) => ({
+      ...prev,
+      payments: [payment, ...prev.payments],
+      tenants: data.status === "Paid"
+        ? prev.tenants.map((t) => (t.id === data.tenantId ? { ...t, paymentStatus: "Paid" as PaymentStatus } : t))
+        : prev.tenants,
+      activity: data.status === "Paid"
+        ? [{ id: `a${Date.now()}`, type: "payment" as const, message: `${data.tenantName} paid ₹${data.amount.toLocaleString("en-IN")} for Room ${data.roomNumber}`, time: "Just now" }, ...prev.activity.slice(0, 9)]
+        : prev.activity,
+    }));
+  }, [setCurrentData]);
 
   const markPaymentPaid = useCallback((id: string) => {
-    const p = payments.find((x) => x.id === id);
-    setPayments((prev) =>
-      prev.map((x) =>
-        x.id === id ? { ...x, status: "Paid", paidDate: new Date().toISOString().split("T")[0] } : x
-      )
-    );
-    if (p) {
-      pushActivity("payment", `${p.tenantName} paid ₹${p.amount.toLocaleString("en-IN")} for Room ${p.roomNumber}`);
-      setTenants((prev) =>
-        prev.map((t) => (t.id === p.tenantId ? { ...t, paymentStatus: "Paid" } : t))
-      );
-    }
-  }, [payments, pushActivity]);
+    setCurrentData((prev) => {
+      const p = prev.payments.find((x) => x.id === id);
+      return {
+        ...prev,
+        payments: prev.payments.map((x) =>
+          x.id === id ? { ...x, status: "Paid" as PaymentStatus, paidDate: new Date().toISOString().split("T")[0] } : x
+        ),
+        tenants: p
+          ? prev.tenants.map((t) => (t.id === p.tenantId ? { ...t, paymentStatus: "Paid" as PaymentStatus } : t))
+          : prev.tenants,
+        activity: p
+          ? [{ id: `a${Date.now()}`, type: "payment" as const, message: `${p.tenantName} paid ₹${p.amount.toLocaleString("en-IN")} for Room ${p.roomNumber}`, time: "Just now" }, ...prev.activity.slice(0, 9)]
+          : prev.activity,
+      };
+    });
+  }, [setCurrentData]);
 
   // ── Notices ──────────────────────────────────────────────
   const addNotice = useCallback((data: Omit<Notice, "id">) => {
-    setNotices((prev) => [{ ...data, id: `n${Date.now()}` }, ...prev]);
-    if (data.status === "Sent") {
-      pushActivity("notice", `Notice sent: ${data.title}`);
-    }
-  }, [pushActivity]);
+    setCurrentData((prev) => ({
+      ...prev,
+      notices: [{ ...data, id: `n${Date.now()}` }, ...prev.notices],
+      activity: data.status === "Sent"
+        ? [{ id: `a${Date.now()}`, type: "notice" as const, message: `Notice sent: ${data.title}`, time: "Just now" }, ...prev.activity.slice(0, 9)]
+        : prev.activity,
+    }));
+  }, [setCurrentData]);
 
   const sendDraft = useCallback((id: string) => {
-    const n = notices.find((x) => x.id === id);
     const now = new Date().toISOString().split("T")[0];
-    setNotices((prev) =>
-      prev.map((x) => (x.id === id ? { ...x, status: "Sent", sentAt: now } : x))
-    );
-    if (n) pushActivity("notice", `Notice sent: ${n.title}`);
-  }, [notices, pushActivity]);
+    setCurrentData((prev) => {
+      const n = prev.notices.find((x) => x.id === id);
+      return {
+        ...prev,
+        notices: prev.notices.map((x) => (x.id === id ? { ...x, status: "Sent" as const, sentAt: now } : x)),
+        activity: n
+          ? [{ id: `a${Date.now()}`, type: "notice" as const, message: `Notice sent: ${n.title}`, time: "Just now" }, ...prev.activity.slice(0, 9)]
+          : prev.activity,
+      };
+    });
+  }, [setCurrentData]);
 
   const deleteNotice = useCallback((id: string) => {
-    setNotices((prev) => prev.filter((x) => x.id !== id));
-  }, []);
+    setCurrentData((prev) => ({
+      ...prev,
+      notices: prev.notices.filter((x) => x.id !== id),
+    }));
+  }, [setCurrentData]);
 
   return (
     <AppContext.Provider value={{
-      tenants, rooms, payments, notices, activity,
+      ...pgData,
       addTenant, editTenant, deleteTenant,
       addRoom, editRoom, markRoomVacant,
       addPayment, markPaymentPaid,

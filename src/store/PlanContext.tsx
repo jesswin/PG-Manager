@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 export type PlanId = "free" | "monthly" | "quarterly";
 
@@ -89,9 +89,30 @@ interface PlanContextType {
 
 const PlanContext = createContext<PlanContextType | null>(null);
 
+const PLAN_STORAGE_KEY = "pgm_plan_id";
+
 export function PlanProvider({ children }: { children: ReactNode }) {
   const [planId, setPlanId] = useState<PlanId>("free");
   const plan = PLANS[planId];
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(PLAN_STORAGE_KEY);
+      if (saved && Object.keys(PLANS).includes(saved)) {
+        setPlanId(saved as PlanId);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PLAN_STORAGE_KEY, planId);
+    } catch {
+      // ignore
+    }
+  }, [planId]);
 
   function can(feature: keyof Plan["features"]): boolean {
     return plan.features[feature];
