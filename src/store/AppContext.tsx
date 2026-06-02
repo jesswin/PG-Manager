@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
 import { useOnboarding } from "@/store/OnboardingContext";
+import { supabase, isSupabaseEnabled } from "@/lib/supabase";
 import {
   tenants as seedTenants,
   rooms as seedRooms,
@@ -10,6 +11,8 @@ import {
   activityFeed as seedActivity,
   Tenant, Room, Payment, Notice, PaymentStatus,
 } from "@/data/mock";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface ActivityItem {
   id: string;
@@ -27,228 +30,351 @@ interface PgAppState {
 }
 
 interface AppContextType extends PgAppState {
-  addTenant: (data: Omit<Tenant, "id" | "avatar">) => void;
-  editTenant: (id: string, data: Partial<Tenant>) => void;
-  deleteTenant: (id: string) => void;
-  addRoom: (data: Omit<Room, "id" | "status">) => void;
-  editRoom: (id: string, data: Partial<Room>) => void;
-  markRoomVacant: (id: string) => void;
-  addPayment: (data: Omit<Payment, "id">) => void;
-  markPaymentPaid: (id: string) => void;
-  addNotice: (data: Omit<Notice, "id">) => void;
-  sendDraft: (id: string) => void;
-  deleteNotice: (id: string) => void;
+  loading: boolean;
+  addTenant: (data: Omit<Tenant, "id" | "avatar">) => Promise<void>;
+  editTenant: (id: string, data: Partial<Tenant>) => Promise<void>;
+  deleteTenant: (id: string) => Promise<void>;
+  addRoom: (data: Omit<Room, "id" | "status">) => Promise<void>;
+  editRoom: (id: string, data: Partial<Room>) => Promise<void>;
+  markRoomVacant: (id: string) => Promise<void>;
+  addPayment: (data: Omit<Payment, "id">) => Promise<void>;
+  markPaymentPaid: (id: string) => Promise<void>;
+  addNotice: (data: Omit<Notice, "id">) => Promise<void>;
+  sendDraft: (id: string) => Promise<void>;
+  deleteNotice: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
-const STORAGE_KEY = "pgm_pg_data";
 
-const EMPTY_STATE: PgAppState = {
-  tenants: [], rooms: [], payments: [], notices: [], activity: [],
-};
+// ── Storage keys ──────────────────────────────────────────────────────────────
+const LS_KEY = "pgm_pg_data";
+
+// ── Seed / demo state ─────────────────────────────────────────────────────────
+const EMPTY_STATE: PgAppState = { tenants: [], rooms: [], payments: [], notices: [], activity: [] };
 
 const DEMO_STATE: PgAppState = {
   tenants: seedTenants,
   rooms: seedRooms,
   payments: seedPayments,
   notices: seedNotices,
-  activity: seedActivity.map((a) => ({
-    id: a.id,
-    type: a.type as ActivityItem["type"],
-    message: a.message,
-    time: a.time,
-  })),
+  activity: seedActivity.map((a) => ({ id: a.id, type: a.type as ActivityItem["type"], message: a.message, time: a.time })),
 };
+
+// ── Supabase row → app type mappers ───────────────────────────────────────────
+
+function mapTenant(row: any): Tenant {
+  return {
+    id: row.id, name: row.name, phone: row.phone, email: row.email,
+    roomNumber: row.room_number, rentAmount: row.rent_amount,
+    moveInDate: row.move_in_date, paymentStatus: row.payment_status as PaymentStatus,
+    avatar: row.avatar || row.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
+    emergencyContact: row.emergency_contact ?? "", emergencyPhone: row.emergency_phone ?? "",
+    idProofType: row.id_proof_type as Tenant["idProofType"], idProofNumber: row.id_proof_number ?? "",
+    occupation: row.occupation ?? "", rentDueDay: row.rent_due_day ?? 5,
+    securityDeposit: row.security_deposit ?? 0, advancePaid: row.advance_paid ?? 0,
+    foodPreference: row.food_preference ?? "No Preference",
+    amenities: row.amenities ?? [], notes: row.notes ?? "",
+  };
+}
+
+function mapRoom(row: any): Room {
+  return {
+    id: row.id, number: row.number, floor: row.floor,
+    type: row.type as Room["type"], status: row.status as Room["status"],
+    tenantId: row.tenant_id ?? undefined, tenantName: row.tenant_name ?? undefined,
+    rentAmount: row.rent_amount, amenities: row.amenities ?? [],
+  };
+}
+
+function mapPayment(row: any): Payment {
+  return {
+    id: row.id, tenantId: row.tenant_id, tenantName: row.tenant_name,
+    roomNumber: row.room_number, amount: row.amount, dueDate: row.due_date,
+    paidDate: row.paid_date ?? undefined, status: row.status as PaymentStatus, month: row.month,
+  };
+}
+
+function mapNotice(row: any): Notice {
+  return {
+    id: row.id, title: row.title, message: row.message,
+    recipient: row.recipient, recipientId: row.recipient_id ?? undefined,
+    status: row.status as Notice["status"], createdAt: row.created_at, sentAt: row.sent_at ?? undefined,
+  };
+}
+
+// ── Provider ──────────────────────────────────────────────────────────────────
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const { activePgId, pgs } = useOnboarding();
-  const [allData, setAllData] = useState<Record<string, PgAppState>>({});
-  const [dataLoaded, setDataLoaded] = useState(false);
 
-  // Refs so mutation callbacks always see latest values without re-creating
-  const activePgIdRef = useRef(activePgId);
-  const pgsRef = useRef(pgs);
-  useEffect(() => { activePgIdRef.current = activePgId; }, [activePgId]);
-  useEffect(() => { pgsRef.current = pgs; }, [pgs]);
+  const [tenants, setTenants]   = useState<Tenant[]>([]);
+  const [rooms, setRooms]       = useState<Room[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [notices, setNotices]   = useState<Notice[]>([]);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [loading, setLoading]   = useState(false);
+  const [lsDataLoaded, setLsDataLoaded] = useState(false);
+
+  // Refs so mutation callbacks always see fresh activePgId / pgs
+  const pgIdRef  = useRef(activePgId);
+  const pgsRef   = useRef(pgs);
+  useEffect(() => { pgIdRef.current  = activePgId; }, [activePgId]);
+  useEffect(() => { pgsRef.current   = pgs;        }, [pgs]);
+
+  // ── Load localStorage data on first mount (local mode only) ───────────────
 
   useEffect(() => {
+    if (isSupabaseEnabled) { setLsDataLoaded(true); return; }
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(LS_KEY);
       if (saved) {
-        const data = JSON.parse(saved);
-        if (data && typeof data === "object") setAllData(data);
+        const all: Record<string, PgAppState> = JSON.parse(saved);
+        // Store data keyed by pgId; will be accessed in the activePgId effect below
+        (window as any).__pgmLsData = all;
       }
     } catch { /* ignore */ }
-    setDataLoaded(true);
+    setLsDataLoaded(true);
   }, []);
+
+  // ── Load / switch data when activePgId changes ────────────────────────────
 
   useEffect(() => {
-    if (!dataLoaded) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
-    } catch { /* ignore */ }
-  }, [allData, dataLoaded]);
+    if (!activePgId) return;
 
-  // Derive current PG's data: first PG gets demo data, subsequent ones start empty
-  const pgData: PgAppState = (() => {
-    if (!activePgId) return DEMO_STATE;
-    if (allData[activePgId]) return allData[activePgId];
-    const isFirstPg = pgs.length > 0 && pgs[0].id === activePgId;
-    return isFirstPg ? DEMO_STATE : EMPTY_STATE;
-  })();
+    if (isSupabaseEnabled && supabase) {
+      setLoading(true);
+      loadFromSupabase(activePgId);
+    } else if (lsDataLoaded) {
+      loadFromLocalStorage(activePgId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePgId, lsDataLoaded]);
 
-  // Mutate active PG's state slice; reads activePgId via ref to avoid stale closures
-  const setCurrentData = useCallback((updater: (prev: PgAppState) => PgAppState) => {
-    setAllData((prev) => {
-      const pgId = activePgIdRef.current;
-      if (!pgId) return prev;
-      const existing = prev[pgId];
-      const isFirstPg = pgsRef.current.length > 0 && pgsRef.current[0].id === pgId;
-      const current = existing ?? (isFirstPg ? DEMO_STATE : EMPTY_STATE);
-      return { ...prev, [pgId]: updater(current) };
-    });
+  async function loadFromSupabase(pgId: string) {
+    if (!supabase) return;
+    const [t, r, p, n] = await Promise.all([
+      supabase.from("tenants").select("*").eq("pg_id", pgId).order("created_at", { ascending: false }),
+      supabase.from("rooms").select("*").eq("pg_id", pgId).order("number"),
+      supabase.from("payments").select("*").eq("pg_id", pgId).order("created_at", { ascending: false }),
+      supabase.from("notices").select("*").eq("pg_id", pgId).order("created_at", { ascending: false }),
+    ]);
+    setTenants((t.data ?? []).map(mapTenant));
+    setRooms((r.data ?? []).map(mapRoom));
+    setPayments((p.data ?? []).map(mapPayment));
+    setNotices((n.data ?? []).map(mapNotice));
+    setActivity([]);
+    setLoading(false);
+  }
+
+  function loadFromLocalStorage(pgId: string) {
+    const all: Record<string, PgAppState> = (window as any).__pgmLsData ?? {};
+    const isFirst = pgsRef.current.length > 0 && pgsRef.current[0].id === pgId;
+    const state: PgAppState = all[pgId] ?? (isFirst ? DEMO_STATE : EMPTY_STATE);
+    setTenants(state.tenants);
+    setRooms(state.rooms);
+    setPayments(state.payments);
+    setNotices(state.notices);
+    setActivity(state.activity);
+  }
+
+  // ── Persist to localStorage (local mode) ──────────────────────────────────
+
+  const persistLs = useCallback(() => {
+    if (isSupabaseEnabled) return;
+    const pgId = pgIdRef.current;
+    if (!pgId) return;
+    const all: Record<string, PgAppState> = (window as any).__pgmLsData ?? {};
+    all[pgId] = { tenants, rooms, payments, notices, activity };
+    (window as any).__pgmLsData = all;
+    try { localStorage.setItem(LS_KEY, JSON.stringify(all)); } catch { /* ignore */ }
+  }, [tenants, rooms, payments, notices, activity]);
+
+  useEffect(() => { persistLs(); }, [persistLs]);
+
+  // ── Activity helper ────────────────────────────────────────────────────────
+
+  function pushActivity(type: ActivityItem["type"], message: string) {
+    setActivity((prev) => [{ id: `a${Date.now()}`, type, message, time: "Just now" }, ...prev.slice(0, 9)]);
+  }
+
+  // ── Tenants ───────────────────────────────────────────────────────────────
+
+  const addTenant = useCallback(async (data: Omit<Tenant, "id" | "avatar">) => {
+    const pgId = pgIdRef.current;
+    const avatar = data.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+    const id = `t${Date.now()}`;
+    const tenant: Tenant = { ...data, id, avatar };
+
+    if (supabase && pgId) {
+      await supabase.from("tenants").insert({
+        id, pg_id: pgId, name: data.name, phone: data.phone, email: data.email,
+        room_number: data.roomNumber, rent_amount: data.rentAmount, move_in_date: data.moveInDate,
+        payment_status: data.paymentStatus, avatar,
+        emergency_contact: data.emergencyContact, emergency_phone: data.emergencyPhone,
+        id_proof_type: data.idProofType, id_proof_number: data.idProofNumber,
+        occupation: data.occupation, rent_due_day: data.rentDueDay,
+        security_deposit: data.securityDeposit, advance_paid: data.advancePaid,
+        food_preference: data.foodPreference, amenities: data.amenities, notes: data.notes,
+      });
+      await supabase.from("rooms").update({ status: "Occupied", tenant_id: id, tenant_name: data.name })
+        .eq("pg_id", pgId).eq("number", data.roomNumber);
+    }
+
+    setTenants((prev) => [tenant, ...prev]);
+    setRooms((prev) => prev.map((r) =>
+      r.number === data.roomNumber ? { ...r, status: "Occupied", tenantId: id, tenantName: data.name } : r
+    ));
+    pushActivity("tenant", `New tenant ${data.name} moved into Room ${data.roomNumber}`);
   }, []);
 
-  // ── Tenants ──────────────────────────────────────────────
-  const addTenant = useCallback((data: Omit<Tenant, "id" | "avatar">) => {
-    const avatar = data.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-    const tenant: Tenant = { ...data, id: `t${Date.now()}`, avatar };
-    setCurrentData((prev) => ({
-      ...prev,
-      tenants: [tenant, ...prev.tenants],
-      rooms: prev.rooms.map((r) =>
-        r.number === data.roomNumber
-          ? { ...r, status: "Occupied" as const, tenantId: tenant.id, tenantName: data.name }
-          : r
-      ),
-      activity: [
-        { id: `a${Date.now()}`, type: "tenant" as const, message: `New tenant ${data.name} moved into Room ${data.roomNumber}`, time: "Just now" },
-        ...prev.activity.slice(0, 9),
-      ],
+  const editTenant = useCallback(async (id: string, data: Partial<Tenant>) => {
+    const pgId = pgIdRef.current;
+    if (supabase && pgId) {
+      const update: Record<string, unknown> = {};
+      if (data.name)          update.name = data.name;
+      if (data.phone)         update.phone = data.phone;
+      if (data.email)         update.email = data.email;
+      if (data.rentAmount)    update.rent_amount = data.rentAmount;
+      if (data.paymentStatus) update.payment_status = data.paymentStatus;
+      if (data.rentDueDay)    update.rent_due_day = data.rentDueDay;
+      if (data.occupation)    update.occupation = data.occupation;
+      if (data.notes !== undefined) update.notes = data.notes;
+      if (data.amenities)     update.amenities = data.amenities;
+      if (data.foodPreference) update.food_preference = data.foodPreference;
+      if (data.securityDeposit !== undefined) update.security_deposit = data.securityDeposit;
+      await supabase.from("tenants").update(update).eq("id", id);
+    }
+    setTenants((prev) => prev.map((t) => {
+      if (t.id !== id) return t;
+      const updated = { ...t, ...data };
+      updated.avatar = updated.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+      return updated;
     }));
-  }, [setCurrentData]);
+  }, []);
 
-  const editTenant = useCallback((id: string, data: Partial<Tenant>) => {
-    setCurrentData((prev) => ({
-      ...prev,
-      tenants: prev.tenants.map((t) => {
-        if (t.id !== id) return t;
-        const updated = { ...t, ...data };
-        updated.avatar = updated.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-        return updated;
-      }),
-    }));
-  }, [setCurrentData]);
+  const deleteTenant = useCallback(async (id: string) => {
+    const pgId = pgIdRef.current;
+    const t = tenants.find((x) => x.id === id);
+    if (supabase && pgId) {
+      await supabase.from("tenants").delete().eq("id", id);
+      if (t) {
+        await supabase.from("rooms").update({ status: "Vacant", tenant_id: null, tenant_name: null })
+          .eq("pg_id", pgId).eq("number", t.roomNumber);
+      }
+    }
+    setTenants((prev) => prev.filter((x) => x.id !== id));
+    setRooms((prev) => prev.map((r) =>
+      r.tenantId === id ? { ...r, status: "Vacant", tenantId: undefined, tenantName: undefined } : r
+    ));
+    if (t) pushActivity("tenant", `${t.name} was removed from Room ${t.roomNumber}`);
+  }, [tenants]);
 
-  const deleteTenant = useCallback((id: string) => {
-    setCurrentData((prev) => {
-      const t = prev.tenants.find((x) => x.id === id);
-      return {
-        ...prev,
-        tenants: prev.tenants.filter((x) => x.id !== id),
-        rooms: prev.rooms.map((r) =>
-          r.tenantId === id ? { ...r, status: "Vacant" as const, tenantId: undefined, tenantName: undefined } : r
-        ),
-        activity: t
-          ? [{ id: `a${Date.now()}`, type: "tenant" as const, message: `${t.name} was removed from Room ${t.roomNumber}`, time: "Just now" }, ...prev.activity.slice(0, 9)]
-          : prev.activity,
-      };
-    });
-  }, [setCurrentData]);
+  // ── Rooms ─────────────────────────────────────────────────────────────────
 
-  // ── Rooms ────────────────────────────────────────────────
-  const addRoom = useCallback((data: Omit<Room, "id" | "status">) => {
-    const room: Room = { ...data, id: `r${data.number}`, status: "Vacant" };
-    setCurrentData((prev) => ({
-      ...prev,
-      rooms: [...prev.rooms, room].sort((a, b) => a.number.localeCompare(b.number)),
-    }));
-  }, [setCurrentData]);
+  const addRoom = useCallback(async (data: Omit<Room, "id" | "status">) => {
+    const pgId = pgIdRef.current;
+    const id = `r${data.number}`;
+    const room: Room = { ...data, id, status: "Vacant" };
+    if (supabase && pgId) {
+      await supabase.from("rooms").insert({
+        id, pg_id: pgId, number: data.number, floor: data.floor,
+        type: data.type, status: "Vacant", rent_amount: data.rentAmount, amenities: data.amenities,
+      });
+    }
+    setRooms((prev) => [...prev, room].sort((a, b) => a.number.localeCompare(b.number)));
+  }, []);
 
-  const editRoom = useCallback((id: string, data: Partial<Room>) => {
-    setCurrentData((prev) => ({
-      ...prev,
-      rooms: prev.rooms.map((r) => (r.id === id ? { ...r, ...data } : r)),
-    }));
-  }, [setCurrentData]);
+  const editRoom = useCallback(async (id: string, data: Partial<Room>) => {
+    if (supabase) {
+      const update: Record<string, unknown> = {};
+      if (data.rentAmount) update.rent_amount = data.rentAmount;
+      if (data.amenities)  update.amenities   = data.amenities;
+      if (data.type)       update.type        = data.type;
+      await supabase.from("rooms").update(update).eq("id", id);
+    }
+    setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, ...data } : r)));
+  }, []);
 
-  const markRoomVacant = useCallback((id: string) => {
-    setCurrentData((prev) => ({
-      ...prev,
-      rooms: prev.rooms.map((r) =>
-        r.id === id ? { ...r, status: "Vacant" as const, tenantId: undefined, tenantName: undefined } : r
-      ),
-    }));
-  }, [setCurrentData]);
+  const markRoomVacant = useCallback(async (id: string) => {
+    if (supabase) {
+      await supabase.from("rooms").update({ status: "Vacant", tenant_id: null, tenant_name: null }).eq("id", id);
+    }
+    setRooms((prev) => prev.map((r) =>
+      r.id === id ? { ...r, status: "Vacant", tenantId: undefined, tenantName: undefined } : r
+    ));
+  }, []);
 
-  // ── Payments ─────────────────────────────────────────────
-  const addPayment = useCallback((data: Omit<Payment, "id">) => {
-    const payment: Payment = { ...data, id: `p${Date.now()}` };
-    setCurrentData((prev) => ({
-      ...prev,
-      payments: [payment, ...prev.payments],
-      tenants: data.status === "Paid"
-        ? prev.tenants.map((t) => (t.id === data.tenantId ? { ...t, paymentStatus: "Paid" as PaymentStatus } : t))
-        : prev.tenants,
-      activity: data.status === "Paid"
-        ? [{ id: `a${Date.now()}`, type: "payment" as const, message: `${data.tenantName} paid ₹${data.amount.toLocaleString("en-IN")} for Room ${data.roomNumber}`, time: "Just now" }, ...prev.activity.slice(0, 9)]
-        : prev.activity,
-    }));
-  }, [setCurrentData]);
+  // ── Payments ──────────────────────────────────────────────────────────────
 
-  const markPaymentPaid = useCallback((id: string) => {
-    setCurrentData((prev) => {
-      const p = prev.payments.find((x) => x.id === id);
-      return {
-        ...prev,
-        payments: prev.payments.map((x) =>
-          x.id === id ? { ...x, status: "Paid" as PaymentStatus, paidDate: new Date().toISOString().split("T")[0] } : x
-        ),
-        tenants: p
-          ? prev.tenants.map((t) => (t.id === p.tenantId ? { ...t, paymentStatus: "Paid" as PaymentStatus } : t))
-          : prev.tenants,
-        activity: p
-          ? [{ id: `a${Date.now()}`, type: "payment" as const, message: `${p.tenantName} paid ₹${p.amount.toLocaleString("en-IN")} for Room ${p.roomNumber}`, time: "Just now" }, ...prev.activity.slice(0, 9)]
-          : prev.activity,
-      };
-    });
-  }, [setCurrentData]);
+  const addPayment = useCallback(async (data: Omit<Payment, "id">) => {
+    const pgId = pgIdRef.current;
+    const id = `p${Date.now()}`;
+    const payment: Payment = { ...data, id };
+    if (supabase && pgId) {
+      await supabase.from("payments").insert({
+        id, pg_id: pgId, tenant_id: data.tenantId, tenant_name: data.tenantName,
+        room_number: data.roomNumber, amount: data.amount, due_date: data.dueDate,
+        paid_date: data.paidDate ?? null, status: data.status, month: data.month,
+      });
+      if (data.status === "Paid") {
+        await supabase.from("tenants").update({ payment_status: "Paid" }).eq("id", data.tenantId);
+      }
+    }
+    setPayments((prev) => [payment, ...prev]);
+    if (data.status === "Paid") {
+      setTenants((prev) => prev.map((t) => t.id === data.tenantId ? { ...t, paymentStatus: "Paid" } : t));
+      pushActivity("payment", `${data.tenantName} paid ₹${data.amount.toLocaleString("en-IN")} for Room ${data.roomNumber}`);
+    }
+  }, []);
 
-  // ── Notices ──────────────────────────────────────────────
-  const addNotice = useCallback((data: Omit<Notice, "id">) => {
-    setCurrentData((prev) => ({
-      ...prev,
-      notices: [{ ...data, id: `n${Date.now()}` }, ...prev.notices],
-      activity: data.status === "Sent"
-        ? [{ id: `a${Date.now()}`, type: "notice" as const, message: `Notice sent: ${data.title}`, time: "Just now" }, ...prev.activity.slice(0, 9)]
-        : prev.activity,
-    }));
-  }, [setCurrentData]);
+  const markPaymentPaid = useCallback(async (id: string) => {
+    const paidDate = new Date().toISOString().split("T")[0];
+    const p = payments.find((x) => x.id === id);
+    if (supabase) {
+      await supabase.from("payments").update({ status: "Paid", paid_date: paidDate }).eq("id", id);
+      if (p) await supabase.from("tenants").update({ payment_status: "Paid" }).eq("id", p.tenantId);
+    }
+    setPayments((prev) => prev.map((x) => x.id === id ? { ...x, status: "Paid", paidDate } : x));
+    if (p) {
+      setTenants((prev) => prev.map((t) => t.id === p.tenantId ? { ...t, paymentStatus: "Paid" } : t));
+      pushActivity("payment", `${p.tenantName} paid ₹${p.amount.toLocaleString("en-IN")} for Room ${p.roomNumber}`);
+    }
+  }, [payments]);
 
-  const sendDraft = useCallback((id: string) => {
+  // ── Notices ───────────────────────────────────────────────────────────────
+
+  const addNotice = useCallback(async (data: Omit<Notice, "id">) => {
+    const pgId = pgIdRef.current;
+    const id = `n${Date.now()}`;
+    if (supabase && pgId) {
+      await supabase.from("notices").insert({
+        id, pg_id: pgId, title: data.title, message: data.message,
+        recipient: data.recipient, recipient_id: data.recipientId ?? null,
+        status: data.status, created_at: data.createdAt, sent_at: data.sentAt ?? null,
+      });
+    }
+    setNotices((prev) => [{ ...data, id }, ...prev]);
+    if (data.status === "Sent") pushActivity("notice", `Notice sent: ${data.title}`);
+  }, []);
+
+  const sendDraft = useCallback(async (id: string) => {
     const now = new Date().toISOString().split("T")[0];
-    setCurrentData((prev) => {
-      const n = prev.notices.find((x) => x.id === id);
-      return {
-        ...prev,
-        notices: prev.notices.map((x) => (x.id === id ? { ...x, status: "Sent" as const, sentAt: now } : x)),
-        activity: n
-          ? [{ id: `a${Date.now()}`, type: "notice" as const, message: `Notice sent: ${n.title}`, time: "Just now" }, ...prev.activity.slice(0, 9)]
-          : prev.activity,
-      };
-    });
-  }, [setCurrentData]);
+    const n = notices.find((x) => x.id === id);
+    if (supabase) {
+      await supabase.from("notices").update({ status: "Sent", sent_at: now }).eq("id", id);
+    }
+    setNotices((prev) => prev.map((x) => x.id === id ? { ...x, status: "Sent" as const, sentAt: now } : x));
+    if (n) pushActivity("notice", `Notice sent: ${n.title}`);
+  }, [notices]);
 
-  const deleteNotice = useCallback((id: string) => {
-    setCurrentData((prev) => ({
-      ...prev,
-      notices: prev.notices.filter((x) => x.id !== id),
-    }));
-  }, [setCurrentData]);
+  const deleteNotice = useCallback(async (id: string) => {
+    if (supabase) await supabase.from("notices").delete().eq("id", id);
+    setNotices((prev) => prev.filter((x) => x.id !== id));
+  }, []);
 
   return (
     <AppContext.Provider value={{
-      ...pgData,
+      tenants, rooms, payments, notices, activity, loading,
       addTenant, editTenant, deleteTenant,
       addRoom, editRoom, markRoomVacant,
       addPayment, markPaymentPaid,

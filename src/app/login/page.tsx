@@ -3,20 +3,20 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/store/AuthContext";
-import { Building2, Eye, EyeOff, Lock, AlertCircle } from "lucide-react";
+import { Building2, Eye, EyeOff, Lock, AlertCircle, Mail } from "lucide-react";
 
 export default function LoginPage() {
-  const { isAuthenticated, hasPassword, hydrated, login } = useAuth();
+  const { isAuthenticated, hasPassword, hydrated, isSupabase, login } = useAuth();
   const router = useRouter();
 
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
-  const [showPwd, setShowPwd] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [showPwd, setShowPwd]   = useState(false);
+  const [error, setError]       = useState("");
+  const [loading, setLoading]   = useState(false);
   const [showReset, setShowReset] = useState(false);
 
-  // Redirect if already authenticated or no password set yet
   useEffect(() => {
     if (!hydrated) return;
     if (isAuthenticated) { router.replace("/"); return; }
@@ -27,12 +27,12 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const ok = await login(password, remember);
+    const ok = await login(email, password, remember);
     setLoading(false);
     if (ok) {
       router.replace("/");
     } else {
-      setError("Incorrect password. Please try again.");
+      setError(isSupabase ? "Incorrect email or password." : "Incorrect password. Please try again.");
       setPassword("");
     }
   }
@@ -72,28 +72,46 @@ export default function LoginPage() {
             </div>
             <div>
               <p className="text-sm font-semibold text-gray-800">Welcome back</p>
-              <p className="text-xs text-gray-500">Enter your password to unlock</p>
+              <p className="text-xs text-gray-500">
+                {isSupabase ? "Sign in with your email and password" : "Enter your password to unlock"}
+              </p>
             </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Email — shown when Supabase is enabled */}
+            {isSupabase && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Email</label>
+                <div className="relative">
+                  <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    autoFocus
+                    required
+                    type="email"
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); setError(""); }}
+                    placeholder="you@email.com"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-800 placeholder:text-gray-400"
+                  />
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">Password</label>
               <div className="relative">
                 <input
-                  autoFocus
+                  autoFocus={!isSupabase}
                   required
                   type={showPwd ? "text" : "password"}
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); setError(""); }}
                   placeholder="Enter your password"
-                  className="w-full px-3 py-2.5 pr-10 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-800 placeholder:text-gray-400"
+                  className="w-full px-3 py-2.5 pr-10 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-800 placeholder:text-gray-400"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPwd((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
+                <button type="button" onClick={() => setShowPwd((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                   {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
@@ -105,44 +123,34 @@ export default function LoginPage() {
             </div>
 
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={(e) => setRemember(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-              />
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
               <span className="text-xs text-gray-600">Remember me for 7 days</span>
             </label>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-60 transition-colors shadow-sm"
-            >
+            <button type="submit" disabled={loading}
+              className="w-full py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-60 transition-colors shadow-sm">
               {loading ? "Signing in…" : "Sign In"}
             </button>
           </form>
         </div>
 
-        {/* Forgot password */}
+        {/* Forgot */}
         <div className="mt-4 text-center">
-          <button
-            onClick={() => setShowReset((v) => !v)}
-            className="text-xs text-gray-400 hover:text-gray-600 underline"
-          >
+          <button onClick={() => setShowReset((v) => !v)} className="text-xs text-gray-400 hover:text-gray-600 underline">
             Forgot password?
           </button>
           {showReset && (
             <div className="mt-3 p-4 bg-red-50 border border-red-200 rounded-xl text-left">
               <p className="text-xs text-red-700 font-semibold mb-1">Reset all data</p>
               <p className="text-xs text-red-600 mb-3 leading-relaxed">
-                This will permanently erase all tenants, rooms, payments, and settings stored in this browser.
+                {isSupabase
+                  ? "Use the 'Forgot password' email link from Supabase, or reset your device data below."
+                  : "This will permanently erase all tenants, rooms, payments, and settings stored in this browser."}
               </p>
-              <button
-                onClick={handleResetAll}
-                className="px-4 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600 transition-colors"
-              >
-                Erase everything & start over
+              <button onClick={handleResetAll}
+                className="px-4 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600 transition-colors">
+                Erase local data & start over
               </button>
             </div>
           )}

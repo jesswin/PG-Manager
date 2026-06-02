@@ -1,19 +1,20 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import type { User } from "@supabase/supabase-js";
+import { supabase, isSupabaseEnabled } from "@/lib/supabase";
 import { isDemoMode, exitDemoMode as _exitDemo } from "@/lib/demo";
 
-const HASH_KEY = "pgm_auth_hash";
-const SESSION_KEY = "pgm_auth_session";  // sessionStorage — cleared on tab close
-const REMEMBER_KEY = "pgm_auth_remember"; // localStorage — persists
+// ── Local-only constants (used when Supabase isn't configured) ────────────────
+const HASH_KEY    = "pgm_auth_hash";
+const SESSION_KEY = "pgm_auth_session";
+const REMEMBER_KEY = "pgm_auth_remember";
 
 async function sha256(text: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(text + "::pgm_salt_2025");
   const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function isRememberValid(): boolean {
@@ -25,13 +26,23 @@ function isRememberValid(): boolean {
   } catch { return false; }
 }
 
+// ── Context type ──────────────────────────────────────────────────────────────
+
 interface AuthContextType {
+  /** Supabase User object — set only when Supabase is enabled and logged in */
+  user: User | null;
   isAuthenticated: boolean;
+  /** False only for brand-new localStorage users who haven't set a password */
   hasPassword: boolean;
   hydrated: boolean;
   demoMode: boolean;
-  login: (password: string, remember?: boolean) => Promise<boolean>;
+  isSupabase: boolean;
+  /** Sign in (email required when Supabase is enabled; ignored in local mode) */
+  login: (email: string, password: string, remember?: boolean) => Promise<boolean>;
   logout: () => void;
+  /** Register — creates Supabase user OR stores local SHA-256 hash */
+  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  /** Legacy helper (still used by onboarding in local mode) */
   setPassword: (password: string) => Promise<void>;
   changePassword: (oldPass: string, newPass: string) => Promise<boolean>;
   exitDemo: () => void;
@@ -39,33 +50,59 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+// ── Provider ──────────────────────────────────────────────────────────────────
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [hasPassword, setHasPassword] = useState(false);
+  const [user, setUser]                   = useState<User | null>(null);
+  const [hasPassword, setHasPassword]     = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
-  const [demoMode, setDemoMode] = useState(false);
+  const [hydrated, setHydrated]           = useState(false);
+  const [demoMode, setDemoMode]           = useState(false);
 
   useEffect(() => {
-    // Demo mode: bypass all auth checks
+    // ── Demo mode ─────────────────────────────────────────────────────────────
     if (isDemoMode()) {
       setDemoMode(true);
       setIsAuthenticated(true);
-      setHasPassword(false); // no real password in demo
+      setHasPassword(false);
       setHydrated(true);
       return;
     }
 
+    // ── Supabase auth ─────────────────────────────────────────────────────────
+    if (supabase) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setUser(session?.user ?? null);
+        setIsAuthenticated(!!session?.user);
+        setHasPassword(true); // Supabase always has password-based auth
+        setHydrated(true);
+      });
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user ?? null);
+        setIsAuthenticated(!!session?.user);
+      });
+
+      return () => subscription.unsubscribe();
+    }
+
+    // ── localStorage fallback ─────────────────────────────────────────────────
     const hash = localStorage.getItem(HASH_KEY);
     setHasPassword(!!hash);
-
-    // Restore session: sessionStorage (tab-scoped) or valid remember-me
     const hasSession = !!sessionStorage.getItem(SESSION_KEY) || isRememberValid();
     if (hash && hasSession) setIsAuthenticated(true);
-
     setHydrated(true);
   }, []);
 
-  const login = useCallback(async (password: string, remember = false): Promise<boolean> => {
+  // ── Login ─────────────────────────────────────────────────────────────────
+
+  const login = useCallback(async (email: string, password: string, remember = false): Promise<boolean> => {
+    if (supabase) {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      return !error;
+    }
+
+    // localStorage: email is ignored, compare password hash
     const stored = localStorage.getItem(HASH_KEY);
     if (!stored) return false;
     const attempt = await sha256(password);
@@ -74,47 +111,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(true);
     sessionStorage.setItem(SESSION_KEY, "1");
     if (remember) {
-      localStorage.setItem(
-        REMEMBER_KEY,
-        JSON.stringify({ expires: Date.now() + 7 * 24 * 60 * 60 * 1000 })
-      );
+      localStorage.setItem(REMEMBER_KEY, JSON.stringify({ expires: Date.now() + 7 * 24 * 60 * 60 * 1000 }));
     }
     return true;
   }, []);
 
-  const logout = useCallback(() => {
-    setIsAuthenticated(false);
-    sessionStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem(REMEMBER_KEY);
+  // ── Sign up (Supabase) / set password (localStorage) ─────────────────────
+
+  const signUp = useCallback(async (email: string, password: string): Promise<{ error: string | null }> => {
+    if (supabase) {
+      const { error } = await supabase.auth.signUp({ email, password });
+      return { error: error?.message ?? null };
+    }
+    // LocalStorage fallback: just hash the password
+    await setPasswordLocal(password);
+    return { error: null };
   }, []);
 
-  const setPassword = useCallback(async (password: string) => {
+  async function setPasswordLocal(password: string) {
     const hash = await sha256(password);
     localStorage.setItem(HASH_KEY, hash);
     setHasPassword(true);
     setIsAuthenticated(true);
     sessionStorage.setItem(SESSION_KEY, "1");
+  }
+
+  const setPassword = useCallback(async (password: string) => {
+    await setPasswordLocal(password);
   }, []);
 
+  // ── Logout ────────────────────────────────────────────────────────────────
+
+  const logout = useCallback(() => {
+    if (supabase) {
+      supabase.auth.signOut();
+    } else {
+      setIsAuthenticated(false);
+      sessionStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(REMEMBER_KEY);
+    }
+  }, []);
+
+  // ── Change password ───────────────────────────────────────────────────────
+
   const changePassword = useCallback(async (oldPass: string, newPass: string): Promise<boolean> => {
+    if (supabase) {
+      const { error } = await supabase.auth.updateUser({ password: newPass });
+      return !error;
+    }
     const stored = localStorage.getItem(HASH_KEY);
     if (!stored) return false;
     const oldHash = await sha256(oldPass);
     if (oldHash !== stored) return false;
-    const newHash = await sha256(newPass);
-    localStorage.setItem(HASH_KEY, newHash);
+    localStorage.setItem(HASH_KEY, await sha256(newPass));
     return true;
   }, []);
+
+  // ── Exit demo ─────────────────────────────────────────────────────────────
 
   const exitDemo = useCallback(() => {
     _exitDemo();
     setDemoMode(false);
     setIsAuthenticated(false);
     setHasPassword(false);
+    setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, hasPassword, hydrated, demoMode, login, logout, setPassword, changePassword, exitDemo }}>
+    <AuthContext.Provider value={{
+      user, isAuthenticated, hasPassword, hydrated, demoMode,
+      isSupabase: isSupabaseEnabled,
+      login, logout, signUp, setPassword, changePassword, exitDemo,
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -55,7 +55,7 @@ const PLAN_HIGHLIGHTS: Record<PlanId, { label: string; included: boolean }[]> = 
 export default function OnboardingPage() {
   const { completeOnboarding, addPg, isOnboarded } = useOnboarding();
   const { plan, setPlan } = usePlan();
-  const { setPassword } = useAuth();
+  const { signUp, isSupabase } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const isAddPgMode = searchParams.get("addPg") === "1";
@@ -104,7 +104,9 @@ export default function OnboardingPage() {
     if (password.length < 6) { setPwdError("Password must be at least 6 characters."); return; }
     if (password !== confirmPassword) { setPwdError("Passwords do not match."); return; }
     setPwdError("");
-    await setPassword(password);
+    // signUp works for both Supabase (email+password) and localStorage (password only)
+    const { error } = await signUp(ownerForm.email, password);
+    if (error) { setPwdError(error); return; }
     goNext();
   }
 
