@@ -159,8 +159,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 function OwnerAvatar({ name }: { name: string }) {
   const initials = name ? name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() : "PG";
   return (
-    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center ml-1">
+    <Link href="/profile" title="My Profile"
+      className="w-8 h-8 rounded-full bg-indigo-100 hover:bg-indigo-200 flex items-center justify-center ml-1 transition-colors">
       <span className="text-xs font-bold text-indigo-700">{initials}</span>
-    </div>
+    </Link>
   );
 }

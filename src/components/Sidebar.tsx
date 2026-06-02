@@ -168,24 +168,22 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           )}
         </div>
 
-        {/* Footer — owner info + logout */}
+        {/* Footer — owner info → /profile */}
         <div className="px-4 py-4 border-t border-gray-200">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+          <Link
+            href="/profile"
+            onClick={onClose}
+            className="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors group"
+          >
+            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 group-hover:bg-indigo-200 transition-colors">
               <span className="text-xs font-bold text-indigo-700">{ownerInitials}</span>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-gray-800 truncate">{owner.name || "PG Owner"}</p>
               <p className={`text-[11px] font-medium truncate ${planColors[plan.id].split(" ")[1]}`}>{plan.name} Plan</p>
             </div>
-            <button
-              onClick={() => { logout(); onClose(); }}
-              title="Sign out"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
-            >
-              <LogOut size={15} />
-            </button>
-          </div>
+            <ChevronRight size={13} className="text-gray-300 group-hover:text-gray-400 shrink-0" />
+          </Link>
         </div>
       </aside>
     </>
