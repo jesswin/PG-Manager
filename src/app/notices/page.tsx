@@ -11,6 +11,9 @@ import { Send, Bell, ChevronDown, Users, Trash2, Eye, Lock, Zap } from "lucide-r
 import { usePlan } from "@/store/PlanContext";
 import UpgradeModal from "@/components/UpgradeModal";
 import Link from "next/link";
+import { useSettings } from "@/store/SettingsContext";
+import { useOnboarding } from "@/store/OnboardingContext";
+import { sendNoticeEmail, sendNoticeSms } from "@/hooks/useAutoNotify";
 
 const inp = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder:text-gray-400 bg-white text-gray-800";
 const EMPTY_FORM = { title: "", message: "", recipientId: "all" };
@@ -19,6 +22,8 @@ export default function NoticesPage() {
   const { tenants, notices, addNotice, sendDraft, deleteNotice } = useApp();
   const { toasts, addToast, dismiss } = useToast();
   const { can } = usePlan();
+  const { notifications, isEmailConfigured, isSmsConfigured } = useSettings();
+  const { activePg } = useOnboarding();
 
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [viewNotice, setViewNotice] = useState<Notice | null>(null);
@@ -35,6 +40,38 @@ export default function NoticesPage() {
     return t ? `${t.name} (Room ${t.roomNumber})` : "All Tenants";
   }
 
+  async function dispatchNotifications(title: string, message: string, recipientId: string) {
+    const pgName = activePg?.name || "PG Manager";
+    const targets = recipientId === "all"
+      ? tenants
+      : tenants.filter((t) => t.id === recipientId);
+
+    for (const t of targets) {
+      if (isEmailConfigured && t.email) {
+        sendNoticeEmail({
+          apiKey: notifications.resendApiKey,
+          fromName: notifications.fromName || pgName,
+          to: t.email,
+          tenantName: t.name,
+          title,
+          message,
+          pgName,
+        }).catch(() => {});
+      }
+      if (isSmsConfigured) {
+        sendNoticeSms({
+          webhookUrl: notifications.smsWebhookUrl,
+          apiKey: notifications.smsApiKey || undefined,
+          tenantPhone: t.phone,
+          tenantName: t.name,
+          title,
+          message,
+          pgName,
+        }).catch(() => {});
+      }
+    }
+  }
+
   function createNotice(status: Notice["status"]) {
     if (!form.title.trim() || !form.message.trim()) { addToast("Please fill in the title and message.", "error"); return; }
     const now = new Date().toISOString().split("T")[0];
@@ -44,12 +81,14 @@ export default function NoticesPage() {
       recipientId: form.recipientId === "all" ? undefined : form.recipientId,
       status, createdAt: now, sentAt: status === "Sent" ? now : undefined,
     });
+    if (status === "Sent") dispatchNotifications(form.title, form.message, form.recipientId);
     setForm({ ...EMPTY_FORM });
     addToast(status === "Sent" ? `Notice sent to ${getRecipient(form.recipientId)}.` : "Notice saved as draft.");
   }
 
   function handleSendDraft(notice: Notice) {
     sendDraft(notice.id);
+    dispatchNotifications(notice.title, notice.message, notice.recipientId ?? "all");
     addToast(`"${notice.title}" sent to ${notice.recipient}.`);
   }
 

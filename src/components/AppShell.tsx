@@ -4,7 +4,9 @@ import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { useOnboarding } from "@/store/OnboardingContext";
-import { Menu, Bell, Search } from "lucide-react";
+import { useSettings } from "@/store/SettingsContext";
+import { useAutoNotify } from "@/hooks/useAutoNotify";
+import { Menu, Bell, Search, CheckCircle2, X } from "lucide-react";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { isOnboarded, hydrated } = useOnboarding();
@@ -12,6 +14,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMsg, setToastMsg] = useState("");
 
   const isPayPage = pathname.startsWith("/pay");
   const isOnboardingPage = pathname.startsWith("/onboarding");
@@ -24,6 +28,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [hydrated, isOnboarded, isFullscreen, router]);
 
+  // Auto-send notifications when app is open and dues are near
+  const { isEmailConfigured, isSmsConfigured } = useSettings();
+  const notifyResult = useAutoNotify(isOnboarded && !isFullscreen && (isEmailConfigured || isSmsConfigured));
+
+  useEffect(() => {
+    if (notifyResult.ran && notifyResult.sent > 0) {
+      const channels = [isEmailConfigured && "email", isSmsConfigured && "SMS"].filter(Boolean).join(" & ");
+      setToastMsg(`Auto-sent ${notifyResult.sent} rent reminder${notifyResult.sent > 1 ? "s" : ""} via ${channels}.`);
+      setToastVisible(true);
+      const t = setTimeout(() => setToastVisible(false), 6000);
+      return () => clearTimeout(t);
+    }
+  }, [notifyResult.ran, notifyResult.sent, isEmailConfigured, isSmsConfigured]);
+
   function handleSearchSubmit(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== "Enter") return;
     const q = searchQuery.trim();
@@ -32,7 +50,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setSearchQuery("");
   }
 
-  // Waiting for localStorage hydration — show spinner to prevent flash
   if (!hydrated) {
     return (
       <div className="h-full flex items-center justify-center bg-gray-50">
@@ -41,12 +58,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Pay page and onboarding page bypass the full shell layout
   if (isFullscreen) {
     return <main className="h-full overflow-y-auto">{children}</main>;
   }
 
-  // Guard: don't render the dashboard while redirect is pending
   if (!isOnboarded) return null;
 
   return (
@@ -87,6 +102,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
+
+      {/* Auto-notify success toast */}
+      {toastVisible && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 bg-emerald-600 text-white text-sm font-medium rounded-xl shadow-lg max-w-sm">
+          <CheckCircle2 size={17} className="shrink-0" />
+          <span className="flex-1">{toastMsg}</span>
+          <button onClick={() => setToastVisible(false)} className="text-emerald-200 hover:text-white ml-1">
+            <X size={15} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
