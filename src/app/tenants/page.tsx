@@ -6,21 +6,26 @@ import { useApp } from "@/store/AppContext";
 import { Tenant } from "@/data/mock";
 import TenantOnboardingForm from "@/components/TenantOnboardingForm";
 import type { TenantFormData } from "@/components/TenantOnboardingForm";
+import MoveOutModal from "@/components/MoveOutModal";
+import type { MoveOutData } from "@/store/AppContext";
 import StatusBadge from "@/components/StatusBadge";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import Modal from "@/components/Modal";
 import { ToastContainer, useToast } from "@/components/Toast";
 import Link from "next/link";
-import { Search, UserPlus, Eye, Pencil, Trash2, ChevronDown, X, MessageCircle, Lock } from "lucide-react";
+import {
+  Search, UserPlus, Eye, Pencil, Trash2, ChevronDown, X,
+  MessageCircle, Lock, LogOut, ChevronRight, History,
+} from "lucide-react";
 import { whatsappUrl, rentReminderMessage } from "@/lib/whatsapp";
 import { getCurrentMonthLabel } from "@/lib/months";
 import { usePlan } from "@/store/PlanContext";
 import UpgradeModal from "@/components/UpgradeModal";
 
 export default function TenantsPage() {
-  const { tenants, rooms, addTenant, editTenant, deleteTenant } = useApp();
+  const { tenants, rooms, addTenant, editTenant, deleteTenant, moveOutTenant } = useApp();
   const { toasts, addToast, dismiss } = useToast();
-  const { can, withinLimit, plan } = usePlan();
+  const { can } = usePlan();
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string; plan: "monthly" | "quarterly" }>({ open: false, feature: "", plan: "monthly" });
   const searchParams = useSearchParams();
 
@@ -31,18 +36,24 @@ export default function TenantsPage() {
   }, [searchParams]);
 
   const [statusFilter, setStatusFilter] = useState("All");
+  const [showHistorySection, setShowHistorySection] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editTarget, setEditTarget] = useState<Tenant | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Tenant | null>(null);
+  const [moveOutTarget, setMoveOutTarget] = useState<Tenant | null>(null);
 
   const vacantRooms = rooms.filter((r) => r.status === "Vacant");
-  // For edit: include the tenant's current room so the form can show it
+
   const roomsForEdit = (t: Tenant) => [
     ...vacantRooms,
     ...rooms.filter((r) => r.tenantId === t.id),
   ];
 
-  const filtered = tenants.filter((t) => {
+  // Split active vs moved-out
+  const activeTenants = tenants.filter((t) => (t.tenantStatus ?? "Active") === "Active");
+  const movedOutTenants = tenants.filter((t) => t.tenantStatus === "MovedOut");
+
+  const filteredActive = activeTenants.filter((t) => {
     const matchSearch =
       t.name.toLowerCase().includes(search.toLowerCase()) ||
       t.roomNumber.includes(search) ||
@@ -51,16 +62,14 @@ export default function TenantsPage() {
     return matchSearch && matchStatus;
   });
 
-  function openAdd() {
-    if (!withinLimit("tenants", tenants.length)) {
-      setUpgradeModal({ open: true, feature: `Add more than ${plan.maxTenants} tenants`, plan: plan.id === "free" ? "monthly" : "quarterly" });
-      return;
-    }
-    setShowAddModal(true);
-  }
+  const filteredHistory = movedOutTenants.filter((t) =>
+    t.name.toLowerCase().includes(search.toLowerCase()) ||
+    t.roomNumber.includes(search) ||
+    t.phone.includes(search)
+  );
 
   function handleAddTenant(data: TenantFormData) {
-    addTenant(data);
+    addTenant({ ...data, tenantStatus: "Active" });
     setShowAddModal(false);
     addToast(`${data.name} added as a new tenant.`);
   }
@@ -78,6 +87,12 @@ export default function TenantsPage() {
     addToast(`${t.name} has been removed.`, "info");
   }
 
+  function handleMoveOut(tenantId: string, data: MoveOutData) {
+    moveOutTenant(tenantId, data);
+    const t = tenants.find((x) => x.id === tenantId);
+    addToast(`${t?.name} has been moved out.`, "info");
+  }
+
   const currentMonth = getCurrentMonthLabel();
 
   return (
@@ -88,9 +103,12 @@ export default function TenantsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tenants</h1>
-          <p className="text-gray-500 text-sm mt-1">{tenants.length} tenants registered</p>
+          <p className="text-gray-500 text-sm mt-1">
+            {activeTenants.length} active · {movedOutTenants.length} moved out
+          </p>
         </div>
-        <button onClick={openAdd} className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">
+        <button onClick={() => setShowAddModal(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">
           <UserPlus size={16} /> Add Tenant
         </button>
       </div>
@@ -117,8 +135,8 @@ export default function TenantsPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* ── Active Tenants Table ─────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-6">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -132,10 +150,10 @@ export default function TenantsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-5 py-12 text-center text-gray-400 text-sm">No tenants found.</td></tr>
+              {filteredActive.length === 0 && (
+                <tr><td colSpan={6} className="px-5 py-12 text-center text-gray-400 text-sm">No active tenants found.</td></tr>
               )}
-              {filtered.map((tenant) => (
+              {filteredActive.map((tenant) => (
                 <tr key={tenant.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
@@ -168,18 +186,23 @@ export default function TenantsPage() {
                         <a href={whatsappUrl(tenant.phone, rentReminderMessage(tenant.name, tenant.roomNumber, tenant.rentAmount, currentMonth, ""))}
                           target="_blank" rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors">
-                          <MessageCircle size={13} /> WhatsApp
+                          <MessageCircle size={13} />
                         </a>
                       ) : (
                         <button onClick={() => setUpgradeModal({ open: true, feature: "WhatsApp Reminders", plan: "monthly" })}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-400 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors">
-                          <Lock size={13} /> WhatsApp
+                          <Lock size={13} />
                         </button>
                       )}
-                      <button onClick={() => setEditTarget(tenant)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors">
+                      <button onClick={() => setEditTarget(tenant)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors">
                         <Pencil size={13} />
                       </button>
-                      <button onClick={() => setDeleteConfirm(tenant)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-md transition-colors">
+                      <button onClick={() => setMoveOutTarget(tenant)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
+                        title="Move Out">
+                        <LogOut size={13} /> Move Out
+                      </button>
+                      <button onClick={() => setDeleteConfirm(tenant)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors">
                         <Trash2 size={13} />
                       </button>
                     </div>
@@ -190,17 +213,99 @@ export default function TenantsPage() {
           </table>
         </div>
         <div className="px-5 py-3 border-t border-gray-100 bg-gray-50">
-          <p className="text-xs text-gray-500">Showing {filtered.length} of {tenants.length} tenants</p>
+          <p className="text-xs text-gray-500">Showing {filteredActive.length} of {activeTenants.length} active tenants</p>
         </div>
       </div>
 
+      {/* ── Move-Out History ─────────────────────────────────────────────────── */}
+      {movedOutTenants.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <button
+            onClick={() => setShowHistorySection((v) => !v)}
+            className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <History size={16} className="text-gray-400" />
+              <span className="text-sm font-semibold text-gray-700">Previous Tenants</span>
+              <span className="ml-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-full">
+                {filteredHistory.length}
+              </span>
+            </div>
+            <ChevronRight size={16} className={`text-gray-400 transition-transform ${showHistorySection ? "rotate-90" : ""}`} />
+          </button>
+
+          {showHistorySection && (
+            <div className="border-t border-gray-100 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Tenant</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Room</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide hidden sm:table-cell">Move-in</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Move-out</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide hidden md:table-cell">Reason</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide hidden lg:table-cell">Security Refund</th>
+                    <th className="text-right px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filteredHistory.map((tenant) => (
+                    <tr key={tenant.id} className="hover:bg-gray-50/50 opacity-80">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                            <span className="text-xs font-bold text-gray-500">{tenant.avatar}</span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-700">{tenant.name}</p>
+                            <p className="text-xs text-gray-400">{tenant.phone}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-gray-500 text-xs font-medium">Room {tenant.roomNumber}</span>
+                      </td>
+                      <td className="px-4 py-3.5 text-gray-500 text-xs hidden sm:table-cell">
+                        {new Date(tenant.moveInDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      </td>
+                      <td className="px-4 py-3.5 text-gray-600 text-xs">
+                        {tenant.moveOutDate
+                          ? new Date(tenant.moveOutDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3.5 text-gray-500 text-xs hidden md:table-cell">{tenant.moveOutReason || "—"}</td>
+                      <td className="px-4 py-3.5 hidden lg:table-cell">
+                        {tenant.securityRefundStatus ? (
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            tenant.securityRefundStatus === "FullRefund" ? "bg-emerald-50 text-emerald-600" :
+                            tenant.securityRefundStatus === "PartialRefund" ? "bg-amber-50 text-amber-600" :
+                            "bg-red-50 text-red-500"
+                          }`}>
+                            {tenant.securityRefundStatus === "FullRefund" ? `Full ₹${tenant.securityRefundAmount?.toLocaleString("en-IN")}` :
+                             tenant.securityRefundStatus === "PartialRefund" ? `Partial ₹${tenant.securityRefundAmount?.toLocaleString("en-IN")}` :
+                             "No Refund"}
+                          </span>
+                        ) : "—"}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Link href={`/tenants/${tenant.id}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors">
+                            <Eye size={13} /> View
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Add Tenant Modal */}
       <Modal open={showAddModal} onClose={() => setShowAddModal(false)} title="Add New Tenant" size="xl">
-        <TenantOnboardingForm
-          vacantRooms={vacantRooms}
-          onSubmit={handleAddTenant}
-          onCancel={() => setShowAddModal(false)}
-        />
+        <TenantOnboardingForm vacantRooms={vacantRooms} onSubmit={handleAddTenant} onCancel={() => setShowAddModal(false)} />
       </Modal>
 
       {/* Edit Tenant Modal */}
@@ -216,17 +321,25 @@ export default function TenantsPage() {
         )}
       </Modal>
 
+      {/* Move-Out Modal */}
+      <MoveOutModal
+        open={!!moveOutTarget}
+        tenant={moveOutTarget}
+        onClose={() => setMoveOutTarget(null)}
+        onConfirm={handleMoveOut}
+      />
+
       <UpgradeModal open={upgradeModal.open} onClose={() => setUpgradeModal({ ...upgradeModal, open: false })} featureName={upgradeModal.feature} requiredPlan={upgradeModal.plan} />
 
       {/* Delete Confirm */}
       <Modal open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} title="Remove Tenant" size="sm">
         <div className="text-center py-2">
           <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4"><Trash2 size={22} className="text-red-500" /></div>
-          <p className="text-sm text-gray-600 mb-1">Remove</p>
+          <p className="text-sm text-gray-600 mb-1">Permanently remove</p>
           <p className="text-base font-semibold text-gray-900 mb-4">{deleteConfirm?.name}?</p>
-          <p className="text-xs text-gray-400 mb-6">This action cannot be undone.</p>
+          <p className="text-xs text-gray-400 mb-6">Use "Move Out" instead to keep a history record.</p>
           <div className="flex gap-3">
-            <button onClick={() => deleteConfirm && handleDelete(deleteConfirm)} className="flex-1 py-2.5 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors">Yes, Remove</button>
+            <button onClick={() => deleteConfirm && handleDelete(deleteConfirm)} className="flex-1 py-2.5 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors">Delete</button>
             <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors">Cancel</button>
           </div>
         </div>

@@ -10,7 +10,7 @@ import {
   payments as seedPayments,
   notices as seedNotices,
   activityFeed as seedActivity,
-  Tenant, Room, Payment, Notice, PaymentStatus,
+  Tenant, Room, Payment, Notice, PaymentStatus, SecurityRefundStatus,
 } from "@/data/mock";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -30,11 +30,20 @@ interface PgAppState {
   activity: ActivityItem[];
 }
 
+export interface MoveOutData {
+  moveOutDate: string;
+  moveOutReason: string;
+  securityRefundStatus: SecurityRefundStatus;
+  securityRefundAmount: number;
+  moveOutNotes: string;
+}
+
 interface AppContextType extends PgAppState {
   loading: boolean;
   addTenant: (data: Omit<Tenant, "id" | "avatar">) => Promise<void>;
   editTenant: (id: string, data: Partial<Tenant>) => Promise<void>;
   deleteTenant: (id: string) => Promise<void>;
+  moveOutTenant: (id: string, data: MoveOutData) => Promise<void>;
   addRoom: (data: Omit<Room, "id" | "status">) => Promise<void>;
   editRoom: (id: string, data: Partial<Room>) => Promise<void>;
   markRoomVacant: (id: string) => Promise<void>;
@@ -75,6 +84,12 @@ function mapTenant(row: any): Tenant {
     securityDeposit: row.security_deposit ?? 0, advancePaid: row.advance_paid ?? 0,
     foodPreference: row.food_preference ?? "No Preference",
     amenities: row.amenities ?? [], notes: row.notes ?? "",
+    tenantStatus: (row.tenant_status ?? "Active") as Tenant["tenantStatus"],
+    moveOutDate: row.move_out_date ?? undefined,
+    moveOutReason: row.move_out_reason ?? undefined,
+    securityRefundStatus: row.security_refund_status ?? undefined,
+    securityRefundAmount: row.security_refund_amount ?? undefined,
+    moveOutNotes: row.move_out_notes ?? undefined,
   };
 }
 
@@ -286,6 +301,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (t) pushActivity("tenant", `${t.name} was removed from Room ${t.roomNumber}`);
   }, [tenants]);
 
+  const moveOutTenant = useCallback(async (id: string, data: MoveOutData) => {
+    const pgId = pgIdRef.current;
+    const t = tenants.find((x) => x.id === id);
+    const moveOutUpdate: Partial<Tenant> = {
+      tenantStatus: "MovedOut",
+      moveOutDate: data.moveOutDate,
+      moveOutReason: data.moveOutReason,
+      securityRefundStatus: data.securityRefundStatus,
+      securityRefundAmount: data.securityRefundAmount,
+      moveOutNotes: data.moveOutNotes,
+    };
+    const sb = getSb(); if (sb) {
+      await sb.from("tenants").update({
+        tenant_status: "MovedOut",
+        move_out_date: data.moveOutDate,
+        move_out_reason: data.moveOutReason,
+        security_refund_status: data.securityRefundStatus,
+        security_refund_amount: data.securityRefundAmount,
+        move_out_notes: data.moveOutNotes,
+      }).eq("id", id);
+      if (t) {
+        await sb.from("rooms").update({ status: "Vacant", tenant_id: null, tenant_name: null })
+          .eq("pg_id", pgId).eq("number", t.roomNumber);
+      }
+    }
+    setTenants((prev) => prev.map((x) => x.id === id ? { ...x, ...moveOutUpdate } : x));
+    setRooms((prev) => prev.map((r) =>
+      r.tenantId === id ? { ...r, status: "Vacant", tenantId: undefined, tenantName: undefined } : r
+    ));
+    if (t) pushActivity("tenant", `${t.name} moved out from Room ${t.roomNumber} on ${data.moveOutDate}`);
+  }, [tenants]);
+
   // ── Rooms ─────────────────────────────────────────────────────────────────
 
   const addRoom = useCallback(async (data: Omit<Room, "id" | "status">) => {
@@ -392,7 +439,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={{
       tenants, rooms, payments, notices, activity, loading,
-      addTenant, editTenant, deleteTenant,
+      addTenant, editTenant, deleteTenant, moveOutTenant,
       addRoom, editRoom, markRoomVacant,
       addPayment, markPaymentPaid,
       addNotice, sendDraft, deleteNotice,

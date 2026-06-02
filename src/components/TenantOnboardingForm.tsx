@@ -32,6 +32,7 @@ const EMPTY: TenantFormData = {
   foodPreference: "No Preference",
   amenities: [],
   notes: "",
+  tenantStatus: "Active",
 };
 
 interface Props {

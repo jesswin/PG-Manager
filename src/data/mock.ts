@@ -4,6 +4,8 @@ export type RoomType = "Single" | "Double" | "Triple";
 export type NoticeStatus = "Sent" | "Draft";
 
 export type FoodPreference = "Veg" | "Non-Veg" | "No Preference";
+export type TenantStatus = "Active" | "MovedOut";
+export type SecurityRefundStatus = "FullRefund" | "PartialRefund" | "NoRefund";
 
 export interface Tenant {
   id: string;
@@ -21,12 +23,19 @@ export interface Tenant {
   idProofNumber: string;
   occupation: string;
   // Extended fields
-  rentDueDay: number;            // day of month rent is due (1-28)
+  rentDueDay: number;
   securityDeposit: number;
   advancePaid: number;
   foodPreference: FoodPreference;
-  amenities: string[];           // e.g. ["WiFi","AC","Meals"]
+  amenities: string[];
   notes: string;
+  // Move-out tracking
+  tenantStatus: TenantStatus;         // "Active" by default
+  moveOutDate?: string;
+  moveOutReason?: string;
+  securityRefundStatus?: SecurityRefundStatus;
+  securityRefundAmount?: number;
+  moveOutNotes?: string;
 }
 
 export interface Room {
@@ -71,6 +80,7 @@ const TENANT_DEFAULTS = {
   foodPreference: "No Preference" as const,
   amenities: [] as string[],
   notes: "",
+  tenantStatus: "Active" as const,
 };
 
 export const tenants: Tenant[] = [

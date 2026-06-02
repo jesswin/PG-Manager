@@ -19,16 +19,18 @@ export default function UpgradeModal({ open, onClose, featureName, requiredPlan 
   const highlights: Record<PlanId, string[]> = {
     free: [],
     monthly: [
+      "Up to 3 PG properties",
+      "Up to 50 rooms total",
+      "Unlimited tenants",
       "WhatsApp individual reminders",
       "Send & manage notices",
       "Export payments as CSV",
-      "Due date reminder panel",
-      "Up to 20 tenants & 30 rooms",
     ],
     quarterly: [
+      "Unlimited PGs & rooms",
+      "Unlimited tenants",
       "Everything in Monthly",
       "Bulk WhatsApp — send all reminders at once",
-      "Unlimited tenants & rooms",
       "Priority support",
       "Save 20% vs monthly billing",
     ],

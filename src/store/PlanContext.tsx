@@ -7,12 +7,13 @@ export type PlanId = "free" | "monthly" | "quarterly";
 export interface Plan {
   id: PlanId;
   name: string;
-  price: number;        // INR
+  price: number;
   period: string;
   color: string;
   badge: string;
-  maxTenants: number;   // Infinity = unlimited
-  maxRooms: number;
+  maxPgs: number;      // max PG properties — this is the key plan differentiator
+  maxRooms: number;    // total rooms across all PGs
+  maxTenants: number;  // always Infinity — tenants are unlimited on all plans
   features: {
     whatsappIndividual: boolean;
     whatsappBulk: boolean;
@@ -20,6 +21,7 @@ export interface Plan {
     exportCsv: boolean;
     dueReminders: boolean;
     prioritySupport: boolean;
+    moveOutModule: boolean;
   };
 }
 
@@ -31,8 +33,9 @@ export const PLANS: Record<PlanId, Plan> = {
     period: "forever",
     color: "gray",
     badge: "bg-gray-100 text-gray-600",
-    maxTenants: 5,
+    maxPgs: 1,
     maxRooms: 10,
+    maxTenants: Infinity,
     features: {
       whatsappIndividual: false,
       whatsappBulk: false,
@@ -40,6 +43,7 @@ export const PLANS: Record<PlanId, Plan> = {
       exportCsv: false,
       dueReminders: false,
       prioritySupport: false,
+      moveOutModule: true,   // available on all plans
     },
   },
   monthly: {
@@ -49,8 +53,9 @@ export const PLANS: Record<PlanId, Plan> = {
     period: "per month",
     color: "indigo",
     badge: "bg-indigo-100 text-indigo-700",
-    maxTenants: 20,
-    maxRooms: 30,
+    maxPgs: 3,
+    maxRooms: 50,
+    maxTenants: Infinity,
     features: {
       whatsappIndividual: true,
       whatsappBulk: false,
@@ -58,6 +63,7 @@ export const PLANS: Record<PlanId, Plan> = {
       exportCsv: true,
       dueReminders: true,
       prioritySupport: false,
+      moveOutModule: true,
     },
   },
   quarterly: {
@@ -67,8 +73,9 @@ export const PLANS: Record<PlanId, Plan> = {
     period: "per quarter",
     color: "purple",
     badge: "bg-purple-100 text-purple-700",
-    maxTenants: Infinity,
+    maxPgs: Infinity,
     maxRooms: Infinity,
+    maxTenants: Infinity,
     features: {
       whatsappIndividual: true,
       whatsappBulk: true,
@@ -76,6 +83,7 @@ export const PLANS: Record<PlanId, Plan> = {
       exportCsv: true,
       dueReminders: true,
       prioritySupport: true,
+      moveOutModule: true,
     },
   },
 };
@@ -84,11 +92,10 @@ interface PlanContextType {
   plan: Plan;
   setPlan: (id: PlanId) => void;
   can: (feature: keyof Plan["features"]) => boolean;
-  withinLimit: (what: "tenants" | "rooms", count: number) => boolean;
+  withinLimit: (what: "pgs" | "rooms", count: number) => boolean;
 }
 
 const PlanContext = createContext<PlanContextType | null>(null);
-
 const PLAN_STORAGE_KEY = "pgm_plan_id";
 
 export function PlanProvider({ children }: { children: ReactNode }) {
@@ -98,28 +105,21 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(PLAN_STORAGE_KEY);
-      if (saved && Object.keys(PLANS).includes(saved)) {
-        setPlanId(saved as PlanId);
-      }
-    } catch {
-      // ignore
-    }
+      if (saved && Object.keys(PLANS).includes(saved)) setPlanId(saved as PlanId);
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(PLAN_STORAGE_KEY, planId);
-    } catch {
-      // ignore
-    }
+    try { localStorage.setItem(PLAN_STORAGE_KEY, planId); }
+    catch { /* ignore */ }
   }, [planId]);
 
   function can(feature: keyof Plan["features"]): boolean {
     return plan.features[feature];
   }
 
-  function withinLimit(what: "tenants" | "rooms", count: number): boolean {
-    const limit = what === "tenants" ? plan.maxTenants : plan.maxRooms;
+  function withinLimit(what: "pgs" | "rooms", count: number): boolean {
+    const limit = what === "pgs" ? plan.maxPgs : plan.maxRooms;
     return count < limit;
   }
 

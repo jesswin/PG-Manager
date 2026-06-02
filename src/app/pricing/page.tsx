@@ -5,9 +5,11 @@ import { ToastContainer, useToast } from "@/components/Toast";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { CheckCircle2, Lock, Zap, Shield, Star, Crown } from "lucide-react";
 
-const FEATURE_ROWS: { label: string; key: keyof typeof PLANS["free"]["features"] | "maxTenants" | "maxRooms" }[] = [
-  { label: "Max Tenants", key: "maxTenants" },
-  { label: "Max Rooms", key: "maxRooms" },
+const FEATURE_ROWS: { label: string; key: keyof typeof PLANS["free"]["features"] | "maxPgs" | "maxRooms" | "maxTenants" }[] = [
+  { label: "PG Properties", key: "maxPgs" },
+  { label: "Total Rooms", key: "maxRooms" },
+  { label: "Tenants", key: "maxTenants" },
+  { label: "Tenant Move-Out Module", key: "moveOutModule" },
   { label: "WhatsApp Individual Reminder", key: "whatsappIndividual" },
   { label: "Due Reminder Panel", key: "dueReminders" },
   { label: "Bulk WhatsApp (Send All)", key: "whatsappBulk" },
@@ -17,8 +19,9 @@ const FEATURE_ROWS: { label: string; key: keyof typeof PLANS["free"]["features"]
 ];
 
 function featureValue(plan: typeof PLANS["free"], key: string): string | boolean {
-  if (key === "maxTenants") return plan.maxTenants === Infinity ? "Unlimited" : String(plan.maxTenants);
-  if (key === "maxRooms") return plan.maxRooms === Infinity ? "Unlimited" : String(plan.maxRooms);
+  if (key === "maxPgs")     return plan.maxPgs === Infinity ? "Unlimited" : String(plan.maxPgs);
+  if (key === "maxRooms")   return plan.maxRooms === Infinity ? "Unlimited" : String(plan.maxRooms);
+  if (key === "maxTenants") return "Unlimited";
   return (plan.features as any)[key] as boolean;
 }
 
