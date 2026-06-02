@@ -1,6 +1,6 @@
 export type PaymentStatus = "Paid" | "Unpaid" | "Partial";
 export type RoomStatus = "Occupied" | "Vacant";
-export type RoomType = "Single" | "Double" | "Triple";
+export type RoomType = string;  // now fully dynamic — owner defines their own types
 export type NoticeStatus = "Sent" | "Draft";
 
 export type FoodPreference = "Veg" | "Non-Veg" | "No Preference";
@@ -41,8 +41,8 @@ export interface Tenant {
 export interface Room {
   id: string;
   number: string;
-  floor: number;
-  type: RoomType;
+  floor: string;   // dynamic — e.g. "Ground Floor", "Floor 1", "Basement"
+  type: RoomType;  // dynamic — e.g. "Single", "Deluxe AC", "Suite"
   status: RoomStatus;
   tenantId?: string;
   tenantName?: string;
@@ -100,28 +100,28 @@ export const tenants: Tenant[] = [
 
 export const rooms: Room[] = [
   // Floor 1
-  { id: "r101", number: "101", floor: 1, type: "Single", status: "Occupied", tenantId: "t1", tenantName: "Arjun Sharma", rentAmount: 8500, amenities: ["AC", "Attached Bath"] },
-  { id: "r102", number: "102", floor: 1, type: "Single", status: "Occupied", tenantId: "t2", tenantName: "Priya Nair", rentAmount: 8500, amenities: ["AC", "Attached Bath"] },
-  { id: "r103", number: "103", floor: 1, type: "Double", status: "Vacant", rentAmount: 7000, amenities: ["Fan", "Common Bath"] },
-  { id: "r104", number: "104", floor: 1, type: "Double", status: "Vacant", rentAmount: 7000, amenities: ["Fan", "Common Bath"] },
-  { id: "r105", number: "105", floor: 1, type: "Triple", status: "Vacant", rentAmount: 5500, amenities: ["Fan", "Common Bath"] },
-  { id: "r106", number: "106", floor: 1, type: "Triple", status: "Vacant", rentAmount: 5500, amenities: ["Fan", "Common Bath"] },
+  { id: "r101", number: "101", floor: "Floor 1", type: "Single", status: "Occupied", tenantId: "t1", tenantName: "Arjun Sharma", rentAmount: 8500, amenities: ["AC", "Attached Bath"] },
+  { id: "r102", number: "102", floor: "Floor 1", type: "Single", status: "Occupied", tenantId: "t2", tenantName: "Priya Nair", rentAmount: 8500, amenities: ["AC", "Attached Bath"] },
+  { id: "r103", number: "103", floor: "Floor 1", type: "Double", status: "Vacant", rentAmount: 7000, amenities: ["Fan", "Common Bath"] },
+  { id: "r104", number: "104", floor: "Floor 1", type: "Double", status: "Vacant", rentAmount: 7000, amenities: ["Fan", "Common Bath"] },
+  { id: "r105", number: "105", floor: "Floor 1", type: "Triple", status: "Vacant", rentAmount: 5500, amenities: ["Fan", "Common Bath"] },
+  { id: "r106", number: "106", floor: "Floor 1", type: "Triple", status: "Vacant", rentAmount: 5500, amenities: ["Fan", "Common Bath"] },
   // Floor 2
-  { id: "r201", number: "201", floor: 2, type: "Double", status: "Occupied", tenantId: "t3", tenantName: "Rahul Verma", rentAmount: 7000, amenities: ["AC", "Common Bath"] },
-  { id: "r202", number: "202", floor: 2, type: "Double", status: "Occupied", tenantId: "t4", tenantName: "Sneha Iyer", rentAmount: 7000, amenities: ["AC", "Common Bath"] },
-  { id: "r203", number: "203", floor: 2, type: "Single", status: "Occupied", tenantId: "t5", tenantName: "Karthik Menon", rentAmount: 9500, amenities: ["AC", "Attached Bath", "Balcony"] },
-  { id: "r204", number: "204", floor: 2, type: "Single", status: "Occupied", tenantId: "t6", tenantName: "Divya Reddy", rentAmount: 9500, amenities: ["AC", "Attached Bath", "Balcony"] },
-  { id: "r205", number: "205", floor: 2, type: "Triple", status: "Vacant", rentAmount: 5500, amenities: ["Fan", "Common Bath"] },
-  { id: "r206", number: "206", floor: 2, type: "Triple", status: "Vacant", rentAmount: 5500, amenities: ["Fan", "Common Bath"] },
+  { id: "r201", number: "201", floor: "Floor 2", type: "Double", status: "Occupied", tenantId: "t3", tenantName: "Rahul Verma", rentAmount: 7000, amenities: ["AC", "Common Bath"] },
+  { id: "r202", number: "202", floor: "Floor 2", type: "Double", status: "Occupied", tenantId: "t4", tenantName: "Sneha Iyer", rentAmount: 7000, amenities: ["AC", "Common Bath"] },
+  { id: "r203", number: "203", floor: "Floor 2", type: "Single", status: "Occupied", tenantId: "t5", tenantName: "Karthik Menon", rentAmount: 9500, amenities: ["AC", "Attached Bath", "Balcony"] },
+  { id: "r204", number: "204", floor: "Floor 2", type: "Single", status: "Occupied", tenantId: "t6", tenantName: "Divya Reddy", rentAmount: 9500, amenities: ["AC", "Attached Bath", "Balcony"] },
+  { id: "r205", number: "205", floor: "Floor 2", type: "Triple", status: "Vacant", rentAmount: 5500, amenities: ["Fan", "Common Bath"] },
+  { id: "r206", number: "206", floor: "Floor 2", type: "Triple", status: "Vacant", rentAmount: 5500, amenities: ["Fan", "Common Bath"] },
   // Floor 3
-  { id: "r301", number: "301", floor: 3, type: "Double", status: "Occupied", tenantId: "t7", tenantName: "Amit Patel", rentAmount: 6500, amenities: ["Fan", "Attached Bath"] },
-  { id: "r302", number: "302", floor: 3, type: "Single", status: "Occupied", tenantId: "t8", tenantName: "Neha Gupta", rentAmount: 8000, amenities: ["AC", "Attached Bath"] },
-  { id: "r303", number: "303", floor: 3, type: "Single", status: "Occupied", tenantId: "t9", tenantName: "Vijay Kumar", rentAmount: 8000, amenities: ["AC", "Attached Bath"] },
-  { id: "r304", number: "304", floor: 3, type: "Single", status: "Occupied", tenantId: "t10", tenantName: "Ananya Singh", rentAmount: 9000, amenities: ["AC", "Attached Bath", "Balcony"] },
-  { id: "r305", number: "305", floor: 3, type: "Single", status: "Occupied", tenantId: "t11", tenantName: "Rohan Desai", rentAmount: 9000, amenities: ["AC", "Attached Bath", "Balcony"] },
-  { id: "r306", number: "306", floor: 3, type: "Double", status: "Occupied", tenantId: "t12", tenantName: "Pooja Krishnan", rentAmount: 10000, amenities: ["AC", "Attached Bath", "Balcony", "City View"] },
-  { id: "r307", number: "307", floor: 3, type: "Triple", status: "Vacant", rentAmount: 6000, amenities: ["Fan", "Common Bath"] },
-  { id: "r308", number: "308", floor: 3, type: "Triple", status: "Vacant", rentAmount: 6000, amenities: ["Fan", "Common Bath"] },
+  { id: "r301", number: "301", floor: "Floor 3", type: "Double", status: "Occupied", tenantId: "t7", tenantName: "Amit Patel", rentAmount: 6500, amenities: ["Fan", "Attached Bath"] },
+  { id: "r302", number: "302", floor: "Floor 3", type: "Single", status: "Occupied", tenantId: "t8", tenantName: "Neha Gupta", rentAmount: 8000, amenities: ["AC", "Attached Bath"] },
+  { id: "r303", number: "303", floor: "Floor 3", type: "Single", status: "Occupied", tenantId: "t9", tenantName: "Vijay Kumar", rentAmount: 8000, amenities: ["AC", "Attached Bath"] },
+  { id: "r304", number: "304", floor: "Floor 3", type: "Single", status: "Occupied", tenantId: "t10", tenantName: "Ananya Singh", rentAmount: 9000, amenities: ["AC", "Attached Bath", "Balcony"] },
+  { id: "r305", number: "305", floor: "Floor 3", type: "Single", status: "Occupied", tenantId: "t11", tenantName: "Rohan Desai", rentAmount: 9000, amenities: ["AC", "Attached Bath", "Balcony"] },
+  { id: "r306", number: "306", floor: "Floor 3", type: "Double", status: "Occupied", tenantId: "t12", tenantName: "Pooja Krishnan", rentAmount: 10000, amenities: ["AC", "Attached Bath", "Balcony", "City View"] },
+  { id: "r307", number: "307", floor: "Floor 3", type: "Triple", status: "Vacant", rentAmount: 6000, amenities: ["Fan", "Common Bath"] },
+  { id: "r308", number: "308", floor: "Floor 3", type: "Triple", status: "Vacant", rentAmount: 6000, amenities: ["Fan", "Common Bath"] },
 ];
 
 export const payments: Payment[] = [

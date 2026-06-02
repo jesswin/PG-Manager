@@ -95,8 +95,9 @@ function mapTenant(row: any): Tenant {
 
 function mapRoom(row: any): Room {
   return {
-    id: row.id, number: row.number, floor: row.floor,
-    type: row.type as Room["type"], status: row.status as Room["status"],
+    id: row.id, number: row.number,
+    floor: typeof row.floor === "number" ? `Floor ${row.floor}` : String(row.floor ?? "Floor 1"),
+    type: String(row.type ?? "Single"), status: row.status as Room["status"],
     tenantId: row.tenant_id ?? undefined, tenantName: row.tenant_name ?? undefined,
     rentAmount: row.rent_amount, amenities: row.amenities ?? [],
   };

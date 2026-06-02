@@ -7,7 +7,7 @@ import { ToastContainer, useToast } from "@/components/Toast";
 import {
   Settings, CreditCard, Eye, EyeOff, CheckCircle2, AlertCircle,
   ExternalLink, Copy, Building2, Zap, Bell, Mail, MessageSquare,
-  ToggleLeft, ToggleRight, Link2,
+  ToggleLeft, ToggleRight, Link2, DoorOpen, Plus, X as XIcon,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -17,6 +17,7 @@ export default function SettingsPage() {
   const {
     razorpay, updateRazorpay, isRazorpayConfigured,
     notifications, updateNotifications, isEmailConfigured, isSmsConfigured,
+    floors, roomTypes, addFloor, removeFloor, addRoomType, removeRoomType,
   } = useSettings();
   const { toasts, addToast, dismiss } = useToast();
 
@@ -27,6 +28,8 @@ export default function SettingsPage() {
   const [showSmsKey, setShowSmsKey] = useState(false);
   const [rzpSaved, setRzpSaved] = useState(false);
   const [notifSaved, setNotifSaved] = useState(false);
+  const [newFloor, setNewFloor] = useState("");
+  const [newRoomType, setNewRoomType] = useState("");
 
   function handleRzpSave(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -386,6 +389,98 @@ export default function SettingsPage() {
           </button>
         </div>
       </form>
+
+      {/* ── Room Configuration ───────────────────────────────── */}
+      <div className="space-y-6 mt-8">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+              <DoorOpen size={16} className="text-indigo-600" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-gray-800">Room Configuration</h2>
+              <p className="text-xs text-gray-500">Define your floors and room types — used in Add/Edit Room form</p>
+            </div>
+          </div>
+          <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-6">
+
+            {/* Floors */}
+            <div>
+              <p className="text-xs font-semibold text-gray-700 mb-3">Floors</p>
+              <div className="space-y-2 mb-3">
+                {floors.map((f) => (
+                  <div key={f} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                    <span className="text-sm text-gray-800">{f}</span>
+                    <button onClick={() => removeFloor(f)}
+                      className="p-1 text-gray-400 hover:text-red-500 transition-colors" title="Remove">
+                      <XIcon size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className={`${inp} flex-1`}
+                  placeholder="e.g. Basement, Terrace…"
+                  value={newFloor}
+                  onChange={(e) => setNewFloor(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (newFloor.trim()) { addFloor(newFloor.trim()); setNewFloor(""); }
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => { if (newFloor.trim()) { addFloor(newFloor.trim()); setNewFloor(""); } }}
+                  className="inline-flex items-center gap-1 px-3 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors">
+                  <Plus size={13} /> Add
+                </button>
+              </div>
+            </div>
+
+            {/* Room Types */}
+            <div>
+              <p className="text-xs font-semibold text-gray-700 mb-3">Room Types</p>
+              <div className="space-y-2 mb-3">
+                {roomTypes.map((t) => (
+                  <div key={t} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                    <span className="text-sm text-gray-800">{t}</span>
+                    <button onClick={() => removeRoomType(t)}
+                      className="p-1 text-gray-400 hover:text-red-500 transition-colors" title="Remove">
+                      <XIcon size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className={`${inp} flex-1`}
+                  placeholder="e.g. Deluxe AC, Suite…"
+                  value={newRoomType}
+                  onChange={(e) => setNewRoomType(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (newRoomType.trim()) { addRoomType(newRoomType.trim()); setNewRoomType(""); }
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => { if (newRoomType.trim()) { addRoomType(newRoomType.trim()); setNewRoomType(""); } }}
+                  className="inline-flex items-center gap-1 px-3 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors">
+                  <Plus size={13} /> Add
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

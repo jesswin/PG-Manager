@@ -2,25 +2,23 @@
 
 import { useState } from "react";
 import { useApp } from "@/store/AppContext";
-import { Room, RoomType } from "@/data/mock";
+import { useSettings } from "@/store/SettingsContext";
+import { Room } from "@/data/mock";
 import StatusBadge from "@/components/StatusBadge";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import Modal from "@/components/Modal";
 import { ToastContainer, useToast } from "@/components/Toast";
 import Link from "next/link";
-import { ChevronDown, DoorOpen, Users, Building, Plus, Pencil, Search, X } from "lucide-react";
+import { ChevronDown, DoorOpen, Users, Building, Plus, Pencil, Search, X, Check } from "lucide-react";
 
 const inp = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-800 placeholder:text-gray-400";
-const AMENITY_OPTIONS = ["AC", "Fan", "Attached Bath", "Common Bath", "Balcony", "City View", "WiFi", "Geyser"];
-const EMPTY_FORM = { number: "", floor: "1", type: "Single" as RoomType, rentAmount: "", amenities: [] as string[] };
-const roomTypeColor: Record<RoomType, string> = {
-  Single: "bg-blue-50 text-blue-700",
-  Double: "bg-purple-50 text-purple-700",
-  Triple: "bg-orange-50 text-orange-700",
-};
+const AMENITY_OPTIONS = ["AC", "Fan", "Attached Bath", "Common Bath", "Balcony", "City View", "WiFi", "Geyser", "TV", "Parking"];
+
+const EMPTY_FORM = { number: "", floor: "", type: "", rentAmount: "", amenities: [] as string[] };
 
 export default function RoomsPage() {
   const { rooms, addRoom, editRoom, markRoomVacant } = useApp();
+  const { floors, roomTypes, addFloor, addRoomType } = useSettings();
   const { toasts, addToast, dismiss } = useToast();
 
   const [search, setSearch] = useState("");
@@ -31,25 +29,39 @@ export default function RoomsPage() {
   const [viewRoom, setViewRoom] = useState<Room | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
 
+  // "Add New" inline state for floor / type
+  const [customFloor, setCustomFloor] = useState("");
+  const [customType, setCustomType] = useState("");
+  const [showAddFloor, setShowAddFloor] = useState(false);
+  const [showAddType, setShowAddType] = useState(false);
+
+  // All floors that exist on rooms + the configured ones (merged, deduped)
+  const allFloors = [...new Set([...floors, ...rooms.map((r) => r.floor)])].sort();
+
   const totalRooms = rooms.length;
   const occupied = rooms.filter((r) => r.status === "Occupied").length;
   const vacant = totalRooms - occupied;
-
-  const floors = [...new Set(rooms.map((r) => r.floor))].sort();
 
   const filtered = rooms.filter((r) => {
     const matchSearch =
       r.number.includes(search) ||
       (r.tenantName ?? "").toLowerCase().includes(search.toLowerCase());
-    const matchFloor = floorFilter === "All" || r.floor === Number(floorFilter);
+    const matchFloor = floorFilter === "All" || r.floor === floorFilter;
     const matchStatus = statusFilter === "All" || r.status === statusFilter;
     return matchSearch && matchFloor && matchStatus;
   });
 
-  function openAdd() { setForm({ ...EMPTY_FORM }); setShowAddModal(true); }
+  function openAdd() {
+    setForm({ ...EMPTY_FORM, floor: floors[0] ?? "", type: roomTypes[0] ?? "" });
+    setShowAddFloor(false); setShowAddType(false);
+    setCustomFloor(""); setCustomType("");
+    setShowAddModal(true);
+  }
 
   function openEdit(room: Room) {
-    setForm({ number: room.number, floor: String(room.floor), type: room.type, rentAmount: String(room.rentAmount), amenities: [...room.amenities] });
+    setForm({ number: room.number, floor: room.floor, type: room.type, rentAmount: String(room.rentAmount), amenities: [...room.amenities] });
+    setShowAddFloor(false); setShowAddType(false);
+    setCustomFloor(""); setCustomType("");
     setEditTarget(room);
   }
 
@@ -57,15 +69,34 @@ export default function RoomsPage() {
     setForm((prev) => ({ ...prev, amenities: prev.amenities.includes(a) ? prev.amenities.filter((x) => x !== a) : [...prev.amenities, a] }));
   }
 
+  function confirmCustomFloor() {
+    const t = customFloor.trim();
+    if (!t) return;
+    addFloor(t);
+    setForm((f) => ({ ...f, floor: t }));
+    setCustomFloor(""); setShowAddFloor(false);
+  }
+
+  function confirmCustomType() {
+    const t = customType.trim();
+    if (!t) return;
+    addRoomType(t);
+    setForm((f) => ({ ...f, type: t }));
+    setCustomType(""); setShowAddType(false);
+  }
+
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!form.floor) { addToast("Please select or create a floor.", "error"); return; }
+    if (!form.type)  { addToast("Please select or create a room type.", "error"); return; }
+
     if (editTarget) {
-      editRoom(editTarget.id, { number: form.number, floor: Number(form.floor), type: form.type, rentAmount: Number(form.rentAmount), amenities: form.amenities });
+      editRoom(editTarget.id, { number: form.number, floor: form.floor, type: form.type, rentAmount: Number(form.rentAmount), amenities: form.amenities });
       setEditTarget(null);
       addToast(`Room ${form.number} updated.`);
     } else {
       if (rooms.find((r) => r.number === form.number)) { addToast(`Room ${form.number} already exists.`, "error"); return; }
-      addRoom({ number: form.number, floor: Number(form.floor), type: form.type, rentAmount: Number(form.rentAmount), amenities: form.amenities });
+      addRoom({ number: form.number, floor: form.floor, type: form.type, rentAmount: Number(form.rentAmount), amenities: form.amenities });
       setShowAddModal(false);
       addToast(`Room ${form.number} added.`);
     }
@@ -87,7 +118,7 @@ export default function RoomsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Rooms</h1>
-          <p className="text-gray-500 text-sm mt-1">Manage all rooms across {floors.length} floors</p>
+          <p className="text-gray-500 text-sm mt-1">Manage all rooms across {allFloors.length} floors</p>
         </div>
         <button onClick={openAdd} className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">
           <Plus size={16} /> Add Room
@@ -119,28 +150,39 @@ export default function RoomsPage() {
             className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white" />
           {search && <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X size={14} /></button>}
         </div>
-        {[
-          { val: floorFilter, set: setFloorFilter, opts: [{ v: "All", l: "All Floors" }, ...floors.map((f) => ({ v: String(f), l: `Floor ${f}` }))] },
-          { val: statusFilter, set: setStatusFilter, opts: [{ v: "All", l: "All Status" }, { v: "Occupied", l: "Occupied" }, { v: "Vacant", l: "Vacant" }] },
-        ].map(({ val, set, opts }, i) => (
-          <div key={i} className="relative">
-            <select value={val} onChange={(e) => set(e.target.value)} className="appearance-none pl-3 pr-8 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-700 cursor-pointer">
-              {opts.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          </div>
-        ))}
+
+        {/* Floor filter */}
+        <div className="relative">
+          <select value={floorFilter} onChange={(e) => setFloorFilter(e.target.value)}
+            className="appearance-none pl-3 pr-8 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-700 cursor-pointer">
+            <option value="All">All Floors</option>
+            {allFloors.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
+          <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        </div>
+
+        {/* Status filter */}
+        <div className="relative">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            className="appearance-none pl-3 pr-8 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-700 cursor-pointer">
+            <option value="All">All Status</option>
+            <option>Occupied</option>
+            <option>Vacant</option>
+          </select>
+          <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        </div>
+
         <p className="ml-auto self-center text-sm text-gray-500">{filtered.length} rooms</p>
       </div>
 
-      {/* Room grid by floor */}
-      {floors.map((floor) => {
+      {/* Room grid grouped by floor */}
+      {allFloors.map((floor) => {
         const floorRooms = filtered.filter((r) => r.floor === floor);
         if (floorRooms.length === 0) return null;
         return (
           <div key={floor} className="mb-8">
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-sm font-semibold text-gray-700">Floor {floor}</span>
+              <span className="text-sm font-semibold text-gray-700">{floor}</span>
               <div className="flex-1 h-px bg-gray-200" />
               <span className="text-xs text-gray-400">{floorRooms.length} rooms</span>
             </div>
@@ -157,7 +199,7 @@ export default function RoomsPage() {
                     <StatusBadge status={room.status} />
                   </div>
                   <div className="space-y-1.5">
-                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${roomTypeColor[room.type]}`}>{room.type}</span>
+                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">{room.type}</span>
                     <p className="text-xs font-semibold text-gray-700 mt-1">&#8377;{room.rentAmount.toLocaleString("en-IN")}<span className="font-normal text-gray-400">/mo</span></p>
                     {room.status === "Occupied" && room.tenantName ? (
                       <Link href={`/tenants/${room.tenantId}`} className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium truncate block" onClick={(e) => e.stopPropagation()}>
@@ -174,23 +216,103 @@ export default function RoomsPage() {
         );
       })}
 
+      {rooms.length === 0 && (
+        <div className="text-center py-16 text-gray-400">
+          <DoorOpen size={40} className="mx-auto mb-3 opacity-30" />
+          <p className="text-sm">No rooms yet. Click "Add Room" to get started.</p>
+        </div>
+      )}
+
       {/* Add / Edit Modal */}
       <Modal open={isModalOpen} onClose={() => { setShowAddModal(false); setEditTarget(null); }} title={editTarget ? `Edit Room ${editTarget.number}` : "Add New Room"}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Room Number *</label>
-              <input required className={inp} value={form.number} onChange={(e) => setForm({ ...form, number: e.target.value })} placeholder="e.g. 401" /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Floor *</label>
-              <select required className={inp} value={form.floor} onChange={(e) => setForm({ ...form, floor: e.target.value })}>
-                {[1, 2, 3, 4, 5].map((f) => <option key={f} value={f}>Floor {f}</option>)}
-              </select></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Room Type *</label>
-              <select required className={inp} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as RoomType })}>
-                <option>Single</option><option>Double</option><option>Triple</option>
-              </select></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Monthly Rent (₹) *</label>
-              <input required type="number" className={inp} value={form.rentAmount} onChange={(e) => setForm({ ...form, rentAmount: e.target.value })} placeholder="8500" min={0} /></div>
+
+            {/* Room number */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Room Number *</label>
+              <input required className={inp} value={form.number}
+                onChange={(e) => setForm({ ...form, number: e.target.value })} placeholder="e.g. 401" />
+            </div>
+
+            {/* Monthly rent */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Monthly Rent (₹) *</label>
+              <input required type="number" className={inp} value={form.rentAmount}
+                onChange={(e) => setForm({ ...form, rentAmount: e.target.value })} placeholder="8500" min={0} />
+            </div>
+
+            {/* Floor — dynamic */}
+            <div className="col-span-2 sm:col-span-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Floor *</label>
+              {!showAddFloor ? (
+                <div className="flex gap-2">
+                  <select required className={`${inp} flex-1`} value={form.floor}
+                    onChange={(e) => setForm({ ...form, floor: e.target.value })}>
+                    <option value="">Select floor…</option>
+                    {[...new Set([...floors, ...(form.floor && !floors.includes(form.floor) ? [form.floor] : [])])].map((f) => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={() => setShowAddFloor(true)}
+                    className="px-2.5 py-2 bg-gray-100 hover:bg-indigo-50 hover:text-indigo-600 text-gray-500 rounded-lg transition-colors text-xs font-bold" title="Add new floor">
+                    + New
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input autoFocus className={`${inp} flex-1`} placeholder="e.g. Terrace, Basement…"
+                    value={customFloor} onChange={(e) => setCustomFloor(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmCustomFloor(); } }} />
+                  <button type="button" onClick={confirmCustomFloor}
+                    className="px-2.5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700">
+                    <Check size={14} />
+                  </button>
+                  <button type="button" onClick={() => { setShowAddFloor(false); setCustomFloor(""); }}
+                    className="px-2.5 py-2 bg-gray-100 text-gray-500 rounded-lg text-xs hover:bg-gray-200">
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Room type — dynamic */}
+            <div className="col-span-2 sm:col-span-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Room Type *</label>
+              {!showAddType ? (
+                <div className="flex gap-2">
+                  <select required className={`${inp} flex-1`} value={form.type}
+                    onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                    <option value="">Select type…</option>
+                    {[...new Set([...roomTypes, ...(form.type && !roomTypes.includes(form.type) ? [form.type] : [])])].map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={() => setShowAddType(true)}
+                    className="px-2.5 py-2 bg-gray-100 hover:bg-indigo-50 hover:text-indigo-600 text-gray-500 rounded-lg transition-colors text-xs font-bold" title="Add new type">
+                    + New
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input autoFocus className={`${inp} flex-1`} placeholder="e.g. Deluxe AC, Suite…"
+                    value={customType} onChange={(e) => setCustomType(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmCustomType(); } }} />
+                  <button type="button" onClick={confirmCustomType}
+                    className="px-2.5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700">
+                    <Check size={14} />
+                  </button>
+                  <button type="button" onClick={() => { setShowAddType(false); setCustomType(""); }}
+                    className="px-2.5 py-2 bg-gray-100 text-gray-500 rounded-lg text-xs hover:bg-gray-200">
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+
           </div>
+
+          {/* Amenities */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-2">Amenities</label>
             <div className="flex flex-wrap gap-2">
@@ -202,63 +324,55 @@ export default function RoomsPage() {
               ))}
             </div>
           </div>
+
           <div className="flex gap-3 pt-2">
             <button type="submit" className="flex-1 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
               {editTarget ? "Save Changes" : "Add Room"}
             </button>
-            <button type="button" onClick={() => { setShowAddModal(false); setEditTarget(null); }} className="px-6 py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors">Cancel</button>
+            <button type="button" onClick={() => { setShowAddModal(false); setEditTarget(null); }}
+              className="px-6 py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors">
+              Cancel
+            </button>
           </div>
         </form>
       </Modal>
 
-      {/* Room Detail Modal */}
-      {viewRoom && (
-        <Modal open={!!viewRoom} onClose={() => setViewRoom(null)} title={`Room ${viewRoom.number} Details`}>
-          <div className="space-y-5">
-            <div className="flex items-center gap-3">
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${roomTypeColor[viewRoom.type]}`}>{viewRoom.type}</span>
+      {/* View Room Modal */}
+      <Modal open={!!viewRoom} onClose={() => setViewRoom(null)} title={viewRoom ? `Room ${viewRoom.number}` : ""} size="sm">
+        {viewRoom && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
               <StatusBadge status={viewRoom.status} />
-              <span className="text-sm text-gray-500">Floor {viewRoom.floor}</span>
+              <span className="text-xs text-gray-500">{viewRoom.floor} · {viewRoom.type}</span>
             </div>
-            <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-              {[
-                { label: "Room Number", value: viewRoom.number },
-                { label: "Monthly Rent", value: `₹${viewRoom.rentAmount.toLocaleString("en-IN")}` },
-                { label: "Status", value: viewRoom.status },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex justify-between text-sm">
-                  <span className="text-gray-500">{label}</span>
-                  <span className="font-semibold text-gray-900">{value}</span>
-                </div>
-              ))}
-              {viewRoom.tenantName && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Current Tenant</span>
-                  <Link href={`/tenants/${viewRoom.tenantId}`} className="font-semibold text-indigo-600 hover:text-indigo-800">{viewRoom.tenantName}</Link>
-                </div>
-              )}
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-400 mb-0.5">Monthly Rent</p>
+                <p className="font-semibold text-gray-900">₹{viewRoom.rentAmount.toLocaleString("en-IN")}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-400 mb-0.5">Amenities</p>
+                <p className="font-semibold text-gray-900 text-xs">{viewRoom.amenities.length ? viewRoom.amenities.join(", ") : "None"}</p>
+              </div>
             </div>
-            {viewRoom.amenities.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Amenities</p>
-                <div className="flex flex-wrap gap-2">
-                  {viewRoom.amenities.map((a) => <span key={a} className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-full">{a}</span>)}
+            {viewRoom.status === "Occupied" && viewRoom.tenantName && (
+              <div className="flex items-center gap-3 p-3 bg-indigo-50 rounded-lg">
+                <Users size={15} className="text-indigo-500" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-800">{viewRoom.tenantName}</p>
+                  <Link href={`/tenants/${viewRoom.tenantId}`} className="text-xs text-indigo-600 hover:underline">View tenant →</Link>
                 </div>
               </div>
             )}
-            <div className="flex gap-3 pt-1">
-              <button onClick={() => { setViewRoom(null); openEdit(viewRoom); }} className="flex-1 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2">
-                <Pencil size={15} /> Edit Room
+            {viewRoom.status === "Occupied" && (
+              <button onClick={() => handleMarkVacant(viewRoom)}
+                className="w-full py-2.5 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors">
+                Mark as Vacant
               </button>
-              {viewRoom.status === "Occupied" && (
-                <button onClick={() => handleMarkVacant(viewRoom)} className="flex-1 py-2.5 bg-amber-50 text-amber-700 border border-amber-200 text-sm font-medium rounded-lg hover:bg-amber-100 transition-colors">
-                  Mark Vacant
-                </button>
-              )}
-            </div>
+            )}
           </div>
-        </Modal>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

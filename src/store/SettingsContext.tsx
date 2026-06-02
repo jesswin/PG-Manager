@@ -48,6 +48,12 @@ export const DEFAULT_NOTIFICATIONS: NotificationConfig = {
   autoSendEnabled: true,
 };
 
+// ── Room Configuration ───────────────────────────────────────────────────────
+
+export const DEFAULT_FLOORS = ["Ground Floor", "Floor 1", "Floor 2", "Floor 3"];
+export const DEFAULT_ROOM_TYPES = ["Single", "Double", "Triple"];
+const ROOM_CONFIG_KEY = "pgm_room_config";
+
 // ── Context ──────────────────────────────────────────────────────────────────
 
 interface SettingsContextType {
@@ -58,6 +64,13 @@ interface SettingsContextType {
   updateNotifications: (cfg: Partial<NotificationConfig>) => void;
   isEmailConfigured: boolean;
   isSmsConfigured: boolean;
+  // Room config
+  floors: string[];
+  roomTypes: string[];
+  addFloor: (floor: string) => void;
+  removeFloor: (floor: string) => void;
+  addRoomType: (type: string) => void;
+  removeRoomType: (type: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType>({
@@ -68,11 +81,19 @@ const SettingsContext = createContext<SettingsContextType>({
   updateNotifications: () => {},
   isEmailConfigured: false,
   isSmsConfigured: false,
+  floors: DEFAULT_FLOORS,
+  roomTypes: DEFAULT_ROOM_TYPES,
+  addFloor: () => {},
+  removeFloor: () => {},
+  addRoomType: () => {},
+  removeRoomType: () => {},
 });
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [razorpay, setRazorpay] = useState<RazorpayConfig>(DEFAULT_RAZORPAY);
   const [notifications, setNotifications] = useState<NotificationConfig>(DEFAULT_NOTIFICATIONS);
+  const [floors, setFloors] = useState<string[]>(DEFAULT_FLOORS);
+  const [roomTypes, setRoomTypes] = useState<string[]>(DEFAULT_ROOM_TYPES);
 
   useEffect(() => {
     try {
@@ -81,8 +102,47 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
       const savedNotif = localStorage.getItem("pgm_notification_config");
       if (savedNotif) setNotifications({ ...DEFAULT_NOTIFICATIONS, ...JSON.parse(savedNotif) });
+
+      const savedRoomConfig = localStorage.getItem(ROOM_CONFIG_KEY);
+      if (savedRoomConfig) {
+        const rc = JSON.parse(savedRoomConfig);
+        if (Array.isArray(rc.floors) && rc.floors.length) setFloors(rc.floors);
+        if (Array.isArray(rc.roomTypes) && rc.roomTypes.length) setRoomTypes(rc.roomTypes);
+      }
     } catch {}
   }, []);
+
+  function saveRoomConfig(f: string[], t: string[]) {
+    try { localStorage.setItem(ROOM_CONFIG_KEY, JSON.stringify({ floors: f, roomTypes: t })); } catch {}
+  }
+
+  function addFloor(floor: string) {
+    const trimmed = floor.trim();
+    if (!trimmed || floors.includes(trimmed)) return;
+    const next = [...floors, trimmed];
+    setFloors(next);
+    saveRoomConfig(next, roomTypes);
+  }
+
+  function removeFloor(floor: string) {
+    const next = floors.filter((f) => f !== floor);
+    setFloors(next);
+    saveRoomConfig(next, roomTypes);
+  }
+
+  function addRoomType(type: string) {
+    const trimmed = type.trim();
+    if (!trimmed || roomTypes.includes(trimmed)) return;
+    const next = [...roomTypes, trimmed];
+    setRoomTypes(next);
+    saveRoomConfig(floors, next);
+  }
+
+  function removeRoomType(type: string) {
+    const next = roomTypes.filter((t) => t !== type);
+    setRoomTypes(next);
+    saveRoomConfig(floors, next);
+  }
 
   function updateRazorpay(cfg: Partial<RazorpayConfig>) {
     setRazorpay((prev) => {
@@ -108,6 +168,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     <SettingsContext.Provider value={{
       razorpay, updateRazorpay, isRazorpayConfigured,
       notifications, updateNotifications, isEmailConfigured, isSmsConfigured,
+      floors, roomTypes, addFloor, removeFloor, addRoomType, removeRoomType,
     }}>
       {children}
     </SettingsContext.Provider>
