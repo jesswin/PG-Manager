@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { isDemoMode, exitDemoMode as _exitDemo } from "@/lib/demo";
 
 const HASH_KEY = "pgm_auth_hash";
 const SESSION_KEY = "pgm_auth_session";  // sessionStorage — cleared on tab close
@@ -28,10 +29,12 @@ interface AuthContextType {
   isAuthenticated: boolean;
   hasPassword: boolean;
   hydrated: boolean;
+  demoMode: boolean;
   login: (password: string, remember?: boolean) => Promise<boolean>;
   logout: () => void;
   setPassword: (password: string) => Promise<void>;
   changePassword: (oldPass: string, newPass: string) => Promise<boolean>;
+  exitDemo: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -40,8 +43,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [hasPassword, setHasPassword] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
 
   useEffect(() => {
+    // Demo mode: bypass all auth checks
+    if (isDemoMode()) {
+      setDemoMode(true);
+      setIsAuthenticated(true);
+      setHasPassword(false); // no real password in demo
+      setHydrated(true);
+      return;
+    }
+
     const hash = localStorage.getItem(HASH_KEY);
     setHasPassword(!!hash);
 
@@ -93,8 +106,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   }, []);
 
+  const exitDemo = useCallback(() => {
+    _exitDemo();
+    setDemoMode(false);
+    setIsAuthenticated(false);
+    setHasPassword(false);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, hasPassword, hydrated, login, logout, setPassword, changePassword }}>
+    <AuthContext.Provider value={{ isAuthenticated, hasPassword, hydrated, demoMode, login, logout, setPassword, changePassword, exitDemo }}>
       {children}
     </AuthContext.Provider>
   );

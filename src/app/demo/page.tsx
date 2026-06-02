@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { enterDemoMode } from "@/lib/demo";
 import {
   Building2, Users, DoorOpen, MessageCircle, CreditCard,
-  Bell, Zap, CheckCircle2, Star, ChevronDown, ChevronRight,
+  Bell, Zap, CheckCircle2, Star, ChevronDown,
   ArrowRight, TrendingUp, Shield, Smartphone, Globe, BarChart3,
-  Clock, AlertCircle, Check, IndianRupee,
+  Clock, AlertCircle, Check, IndianRupee, Play,
 } from "lucide-react";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -158,6 +160,12 @@ const FAQS = [
 
 export default function DemoPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const router = useRouter();
+
+  function handleTryDemo() {
+    enterDemoMode();
+    router.push("/");
+  }
 
   return (
     <div className="min-h-screen bg-white font-sans">
@@ -205,16 +213,20 @@ export default function DemoPage() {
               Stop chasing rent on WhatsApp. Let PG Manager do it for you.
             </p>
             <div className="flex flex-col sm:flex-row items-center gap-3">
+              <button
+                onClick={handleTryDemo}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-bold rounded-xl hover:opacity-90 transition-opacity shadow-lg shadow-indigo-200"
+              >
+                <Play size={15} fill="currentColor" /> Try Live Demo
+              </button>
               <Link href="/onboarding"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors shadow-sm">
                 Start for Free <ArrowRight size={16} />
               </Link>
-              <a href="#features"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors shadow-sm">
-                See Features
-              </a>
             </div>
-            <p className="text-xs text-gray-400 mt-4">No credit card required · Free forever plan available</p>
+            <p className="text-xs text-gray-400 mt-4">
+              Demo uses sample data · No sign-up needed · Or start free with your own data
+            </p>
           </div>
 
           {/* Dashboard mockup */}

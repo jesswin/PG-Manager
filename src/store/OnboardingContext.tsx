@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { isDemoMode, DEMO_PG_ID } from "@/lib/demo";
 
 export interface PGProfile {
   id: string;
@@ -38,6 +39,16 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const [activePgId, setActivePgId] = useState("");
 
   useEffect(() => {
+    // Demo mode: inject a preset owner + PG without touching real localStorage
+    if (isDemoMode()) {
+      setOwner({ name: "Ramesh Agarwal", phone: "9876543210", email: "demo@pgmanager.app" });
+      setPgs([{ id: DEMO_PG_ID, name: "Sunshine PG", address: "123 MG Road", city: "Bangalore" }]);
+      setActivePgId(DEMO_PG_ID);
+      setIsOnboarded(true);
+      setHydrated(true);
+      return;
+    }
+
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
