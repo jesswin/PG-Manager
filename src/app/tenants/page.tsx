@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useApp } from "@/store/AppContext";
-import { Tenant, PaymentStatus } from "@/data/mock";
+import { Tenant } from "@/data/mock";
+import TenantOnboardingForm from "@/components/TenantOnboardingForm";
+import type { TenantFormData } from "@/components/TenantOnboardingForm";
 import StatusBadge from "@/components/StatusBadge";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import Modal from "@/components/Modal";
@@ -15,15 +17,6 @@ import { getCurrentMonthLabel } from "@/lib/months";
 import { usePlan } from "@/store/PlanContext";
 import UpgradeModal from "@/components/UpgradeModal";
 
-const inp = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-800 placeholder:text-gray-400";
-
-const EMPTY_FORM = {
-  name: "", phone: "", email: "", roomNumber: "", rentAmount: "",
-  moveInDate: "", occupation: "", emergencyContact: "", emergencyPhone: "",
-  idProofType: "Aadhar" as Tenant["idProofType"], idProofNumber: "",
-  paymentStatus: "Unpaid" as PaymentStatus,
-};
-
 export default function TenantsPage() {
   const { tenants, rooms, addTenant, editTenant, deleteTenant } = useApp();
   const { toasts, addToast, dismiss } = useToast();
@@ -32,18 +25,22 @@ export default function TenantsPage() {
   const searchParams = useSearchParams();
 
   const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
-
   useEffect(() => {
     const q = searchParams.get("q");
     if (q !== null) setSearch(q);
   }, [searchParams]);
+
   const [statusFilter, setStatusFilter] = useState("All");
   const [showAddModal, setShowAddModal] = useState(false);
   const [editTarget, setEditTarget] = useState<Tenant | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Tenant | null>(null);
-  const [form, setForm] = useState({ ...EMPTY_FORM });
 
   const vacantRooms = rooms.filter((r) => r.status === "Vacant");
+  // For edit: include the tenant's current room so the form can show it
+  const roomsForEdit = (t: Tenant) => [
+    ...vacantRooms,
+    ...rooms.filter((r) => r.tenantId === t.id),
+  ];
 
   const filtered = tenants.filter((t) => {
     const matchSearch =
@@ -59,33 +56,20 @@ export default function TenantsPage() {
       setUpgradeModal({ open: true, feature: `Add more than ${plan.maxTenants} tenants`, plan: plan.id === "free" ? "monthly" : "quarterly" });
       return;
     }
-    setForm({ ...EMPTY_FORM });
     setShowAddModal(true);
   }
 
-  function openEdit(t: Tenant) {
-    setForm({
-      name: t.name, phone: t.phone, email: t.email, roomNumber: t.roomNumber,
-      rentAmount: String(t.rentAmount), moveInDate: t.moveInDate,
-      occupation: t.occupation, emergencyContact: t.emergencyContact,
-      emergencyPhone: t.emergencyPhone, idProofType: t.idProofType,
-      idProofNumber: t.idProofNumber, paymentStatus: t.paymentStatus,
-    });
-    setEditTarget(t);
+  function handleAddTenant(data: TenantFormData) {
+    addTenant(data);
+    setShowAddModal(false);
+    addToast(`${data.name} added as a new tenant.`);
   }
 
-  function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (editTarget) {
-      editTenant(editTarget.id, { ...form, rentAmount: Number(form.rentAmount) });
-      setEditTarget(null);
-      addToast(`${form.name}'s details updated.`);
-    } else {
-      addTenant({ ...form, rentAmount: Number(form.rentAmount) });
-      setShowAddModal(false);
-      addToast(`${form.name} added as a new tenant.`);
-    }
-    setForm({ ...EMPTY_FORM });
+  function handleEditTenant(data: TenantFormData) {
+    if (!editTarget) return;
+    editTenant(editTarget.id, data);
+    setEditTarget(null);
+    addToast(`${data.name}'s details updated.`);
   }
 
   function handleDelete(t: Tenant) {
@@ -94,8 +78,7 @@ export default function TenantsPage() {
     addToast(`${t.name} has been removed.`, "info");
   }
 
-  const isModalOpen = showAddModal || !!editTarget;
-  const modalTitle = editTarget ? `Edit – ${editTarget.name}` : "Add New Tenant";
+  const currentMonth = getCurrentMonthLabel();
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
@@ -143,7 +126,7 @@ export default function TenantsPage() {
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Tenant</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Room</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Rent</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Move-in Date</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Move-in</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                 <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
               </tr>
@@ -182,24 +165,18 @@ export default function TenantsPage() {
                         <Eye size={13} /> View
                       </Link>
                       {can("whatsappIndividual") ? (
-                        <a
-                          href={whatsappUrl(tenant.phone, rentReminderMessage(tenant.name, tenant.roomNumber, tenant.rentAmount, getCurrentMonthLabel()))}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={`Send WhatsApp reminder to ${tenant.name}`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors"
-                        >
+                        <a href={whatsappUrl(tenant.phone, rentReminderMessage(tenant.name, tenant.roomNumber, tenant.rentAmount, currentMonth, ""))}
+                          target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors">
                           <MessageCircle size={13} /> WhatsApp
                         </a>
                       ) : (
-                        <button
-                          onClick={() => setUpgradeModal({ open: true, feature: "WhatsApp Reminders", plan: "monthly" })}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-400 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
-                        >
+                        <button onClick={() => setUpgradeModal({ open: true, feature: "WhatsApp Reminders", plan: "monthly" })}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-400 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors">
                           <Lock size={13} /> WhatsApp
                         </button>
                       )}
-                      <button onClick={() => openEdit(tenant)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors">
+                      <button onClick={() => setEditTarget(tenant)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors">
                         <Pencil size={13} />
                       </button>
                       <button onClick={() => setDeleteConfirm(tenant)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-md transition-colors">
@@ -217,60 +194,26 @@ export default function TenantsPage() {
         </div>
       </div>
 
-      {/* Add / Edit Modal */}
-      <Modal open={isModalOpen} onClose={() => { setShowAddModal(false); setEditTarget(null); }} title={modalTitle} size="lg">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Full Name *</label>
-              <input required className={inp} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Arjun Sharma" /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Phone *</label>
-              <input required className={inp} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="9876543210" maxLength={10} /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Email *</label>
-              <input required type="email" className={inp} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@email.com" /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Occupation</label>
-              <input className={inp} value={form.occupation} onChange={(e) => setForm({ ...form, occupation: e.target.value })} placeholder="Software Engineer" /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Room Number *</label>
-              <select required className={inp} value={form.roomNumber} onChange={(e) => setForm({ ...form, roomNumber: e.target.value })}>
-                <option value="">Select room...</option>
-                {vacantRooms.map((r) => <option key={r.id} value={r.number}>Room {r.number} – Floor {r.floor} ({r.type})</option>)}
-                {editTarget && <option value={editTarget.roomNumber}>Room {editTarget.roomNumber} (current)</option>}
-              </select></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Monthly Rent (₹) *</label>
-              <input required type="number" className={inp} value={form.rentAmount} onChange={(e) => setForm({ ...form, rentAmount: e.target.value })} placeholder="8500" min={0} /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Move-in Date *</label>
-              <input required type="date" className={inp} value={form.moveInDate} onChange={(e) => setForm({ ...form, moveInDate: e.target.value })} /></div>
-            <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Payment Status</label>
-              <select className={inp} value={form.paymentStatus} onChange={(e) => setForm({ ...form, paymentStatus: e.target.value as PaymentStatus })}>
-                <option>Paid</option><option>Unpaid</option><option>Partial</option>
-              </select></div>
-          </div>
-          <div className="pt-1 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Emergency Contact</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Name</label>
-                <input className={inp} value={form.emergencyContact} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} placeholder="Guardian name" /></div>
-              <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Phone</label>
-                <input className={inp} value={form.emergencyPhone} onChange={(e) => setForm({ ...form, emergencyPhone: e.target.value })} placeholder="9876500001" maxLength={10} /></div>
-            </div>
-          </div>
-          <div className="pt-1 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">ID Proof</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Type</label>
-                <select className={inp} value={form.idProofType} onChange={(e) => setForm({ ...form, idProofType: e.target.value as Tenant["idProofType"] })}>
-                  <option>Aadhar</option><option>Passport</option><option>DL</option><option>PAN</option>
-                </select></div>
-              <div><label className="block text-xs font-medium text-gray-600 mb-1.5">Number</label>
-                <input className={inp} value={form.idProofNumber} onChange={(e) => setForm({ ...form, idProofNumber: e.target.value })} placeholder="ID number" /></div>
-            </div>
-          </div>
-          <div className="flex gap-3 pt-2">
-            <button type="submit" className="flex-1 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
-              {editTarget ? "Save Changes" : "Add Tenant"}
-            </button>
-            <button type="button" onClick={() => { setShowAddModal(false); setEditTarget(null); }} className="px-6 py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors">Cancel</button>
-          </div>
-        </form>
+      {/* Add Tenant Modal */}
+      <Modal open={showAddModal} onClose={() => setShowAddModal(false)} title="Add New Tenant" size="xl">
+        <TenantOnboardingForm
+          vacantRooms={vacantRooms}
+          onSubmit={handleAddTenant}
+          onCancel={() => setShowAddModal(false)}
+        />
+      </Modal>
+
+      {/* Edit Tenant Modal */}
+      <Modal open={!!editTarget} onClose={() => setEditTarget(null)} title={editTarget ? `Edit – ${editTarget.name}` : ""} size="xl">
+        {editTarget && (
+          <TenantOnboardingForm
+            vacantRooms={roomsForEdit(editTarget)}
+            initial={editTarget}
+            onSubmit={handleEditTenant}
+            onCancel={() => setEditTarget(null)}
+            submitLabel="Save Changes"
+          />
+        )}
       </Modal>
 
       <UpgradeModal open={upgradeModal.open} onClose={() => setUpgradeModal({ ...upgradeModal, open: false })} featureName={upgradeModal.feature} requiredPlan={upgradeModal.plan} />

@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { usePlan } from "@/store/PlanContext";
 import { useOnboarding } from "@/store/OnboardingContext";
+import { useAuth } from "@/store/AuthContext";
 import {
   LayoutDashboard, Users, DoorOpen, CreditCard,
   Bell, Building2, X, ChevronRight, Zap, Settings,
-  ChevronDown, Check, Plus,
+  ChevronDown, Check, Plus, LogOut,
 } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -30,6 +31,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { plan } = usePlan();
   const { owner, pgs, activePgId, activePg, switchPg } = useOnboarding();
+  const { logout } = useAuth();
   const [pgMenuOpen, setPgMenuOpen] = useState(false);
   const router = useRouter();
 
@@ -166,7 +168,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           )}
         </div>
 
-        {/* Footer — owner info */}
+        {/* Footer — owner info + logout */}
         <div className="px-4 py-4 border-t border-gray-200">
           <div className="flex items-center gap-3 px-2">
             <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
@@ -176,6 +178,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               <p className="text-xs font-semibold text-gray-800 truncate">{owner.name || "PG Owner"}</p>
               <p className={`text-[11px] font-medium truncate ${planColors[plan.id].split(" ")[1]}`}>{plan.name} Plan</p>
             </div>
+            <button
+              onClick={() => { logout(); onClose(); }}
+              title="Sign out"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+            >
+              <LogOut size={15} />
+            </button>
           </div>
         </div>
       </aside>

@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useApp } from "@/store/AppContext";
-import { Tenant, PaymentStatus } from "@/data/mock";
+import { PaymentStatus } from "@/data/mock";
+import TenantOnboardingForm from "@/components/TenantOnboardingForm";
+import type { TenantFormData } from "@/components/TenantOnboardingForm";
 import StatusBadge from "@/components/StatusBadge";
 import Modal from "@/components/Modal";
 import { ToastContainer, useToast } from "@/components/Toast";
@@ -21,13 +23,6 @@ import { getRecentMonths, getCurrentMonthLabel, getPreviousMonthLabel, monthLabe
 const RECENT_MONTHS = getRecentMonths(8);
 
 const inp = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-800 placeholder:text-gray-400";
-
-const EMPTY_TENANT = {
-  name: "", phone: "", email: "", roomNumber: "", rentAmount: "",
-  moveInDate: "", occupation: "", emergencyContact: "", emergencyPhone: "",
-  idProofType: "Aadhar" as Tenant["idProofType"], idProofNumber: "",
-  paymentStatus: "Unpaid" as PaymentStatus,
-};
 
 const EMPTY_NOTICE = { title: "", message: "", recipientId: "all" };
 
@@ -51,7 +46,6 @@ export default function DashboardPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [modal, setModal] = useState<"tenant" | "payment" | "notice" | null>(null);
-  const [tenantForm, setTenantForm] = useState({ ...EMPTY_TENANT });
   const [paymentTenantId, setPaymentTenantId] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMonth, setPaymentMonth] = useState(getCurrentMonthLabel);
@@ -136,12 +130,10 @@ export default function DashboardPage() {
     setAutoSendDismissed(true);
   }
 
-  function handleAddTenant(e: React.SyntheticEvent<HTMLFormElement>) {
-    e.preventDefault();
-    addTenant({ ...tenantForm, rentAmount: Number(tenantForm.rentAmount) });
+  function handleAddTenant(data: TenantFormData) {
+    addTenant(data);
     setModal(null);
-    setTenantForm({ ...EMPTY_TENANT });
-    addToast(`${tenantForm.name} added as a new tenant.`);
+    addToast(`${data.name} added as a new tenant.`);
   }
 
   function handleAddPayment(e: React.SyntheticEvent<HTMLFormElement>) {
@@ -391,51 +383,12 @@ export default function DashboardPage() {
       </div>
 
       {/* Add Tenant Modal */}
-      <Modal open={modal === "tenant"} onClose={() => setModal(null)} title="Add New Tenant" size="lg">
-        <form onSubmit={handleAddTenant} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              { label: "Full Name *", key: "name", placeholder: "Arjun Sharma" },
-              { label: "Phone *", key: "phone", placeholder: "9876543210" },
-              { label: "Email *", key: "email", placeholder: "name@email.com", type: "email" },
-              { label: "Occupation", key: "occupation", placeholder: "Software Engineer" },
-            ].map(({ label, key, placeholder, type }) => (
-              <div key={key}>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">{label}</label>
-                <input required={label.endsWith("*")} type={type || "text"} className={inp} placeholder={placeholder}
-                  value={(tenantForm as any)[key]} onChange={(e) => setTenantForm({ ...tenantForm, [key]: e.target.value })} />
-              </div>
-            ))}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Room Number *</label>
-              <select required className={inp} value={tenantForm.roomNumber} onChange={(e) => setTenantForm({ ...tenantForm, roomNumber: e.target.value })}>
-                <option value="">Select room...</option>
-                {vacantRooms.map((r) => <option key={r.id} value={r.number}>Room {r.number} – Floor {r.floor} ({r.type})</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Monthly Rent (₹) *</label>
-              <input required type="number" className={inp} placeholder="8500" value={tenantForm.rentAmount}
-                onChange={(e) => setTenantForm({ ...tenantForm, rentAmount: e.target.value })} min={0} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Move-in Date *</label>
-              <input required type="date" className={inp} value={tenantForm.moveInDate}
-                onChange={(e) => setTenantForm({ ...tenantForm, moveInDate: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Payment Status</label>
-              <select className={inp} value={tenantForm.paymentStatus}
-                onChange={(e) => setTenantForm({ ...tenantForm, paymentStatus: e.target.value as PaymentStatus })}>
-                <option>Paid</option><option>Unpaid</option><option>Partial</option>
-              </select>
-            </div>
-          </div>
-          <div className="flex gap-3 pt-2">
-            <button type="submit" className="flex-1 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">Add Tenant</button>
-            <button type="button" onClick={() => setModal(null)} className="px-6 py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors">Cancel</button>
-          </div>
-        </form>
+      <Modal open={modal === "tenant"} onClose={() => setModal(null)} title="Add New Tenant" size="xl">
+        <TenantOnboardingForm
+          vacantRooms={vacantRooms}
+          onSubmit={handleAddTenant}
+          onCancel={() => setModal(null)}
+        />
       </Modal>
 
       {/* Record Payment Modal */}

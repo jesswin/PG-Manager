@@ -3,13 +3,15 @@
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
+import { useAuth } from "@/store/AuthContext";
 import { useOnboarding } from "@/store/OnboardingContext";
 import { useSettings } from "@/store/SettingsContext";
 import { useAutoNotify } from "@/hooks/useAutoNotify";
 import { Menu, Bell, Search, CheckCircle2, X } from "lucide-react";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const { isOnboarded, hydrated } = useOnboarding();
+  const { isAuthenticated, hasPassword, hydrated: authHydrated } = useAuth();
+  const { isOnboarded, hydrated: onboardingHydrated, owner } = useOnboarding();
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -19,18 +21,29 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const isPayPage = pathname.startsWith("/pay");
   const isOnboardingPage = pathname.startsWith("/onboarding");
-  const isFullscreen = isPayPage || isOnboardingPage;
+  const isLoginPage = pathname.startsWith("/login");
+  const isFullscreen = isPayPage || isOnboardingPage || isLoginPage;
+
+  const bothHydrated = authHydrated && onboardingHydrated;
 
   useEffect(() => {
-    if (!hydrated) return;
-    if (!isOnboarded && !isFullscreen) {
-      router.push("/onboarding");
-    }
-  }, [hydrated, isOnboarded, isFullscreen, router]);
+    if (!bothHydrated) return;
+    if (isFullscreen) return;
 
-  // Auto-send notifications when app is open and dues are near
+    if (!hasPassword) {
+      // Brand new user — must go through onboarding to set password
+      router.push("/onboarding");
+    } else if (!isAuthenticated) {
+      router.push("/login");
+    }
+    // isOnboarded check: after login, onboarding should be complete already
+    // but handle the edge case gracefully
+  }, [bothHydrated, hasPassword, isAuthenticated, isFullscreen, router]);
+
   const { isEmailConfigured, isSmsConfigured } = useSettings();
-  const notifyResult = useAutoNotify(isOnboarded && !isFullscreen && (isEmailConfigured || isSmsConfigured));
+  const notifyResult = useAutoNotify(
+    isAuthenticated && isOnboarded && !isFullscreen && (isEmailConfigured || isSmsConfigured)
+  );
 
   useEffect(() => {
     if (notifyResult.ran && notifyResult.sent > 0) {
@@ -50,7 +63,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setSearchQuery("");
   }
 
-  if (!hydrated) {
+  if (!bothHydrated) {
     return (
       <div className="h-full flex items-center justify-center bg-gray-50">
         <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -62,7 +75,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return <main className="h-full overflow-y-auto">{children}</main>;
   }
 
-  if (!isOnboarded) return null;
+  if (!hasPassword || !isAuthenticated) return null;
 
   return (
     <div className="flex h-full">
@@ -70,10 +83,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-14 bg-white border-b border-gray-200 flex items-center gap-3 px-4 lg:px-6 shrink-0 z-10">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="lg:hidden p-1.5 rounded-md text-gray-500 hover:bg-gray-100"
-          >
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-1.5 rounded-md text-gray-500 hover:bg-gray-100">
             <Menu size={20} />
           </button>
 
@@ -96,14 +106,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Bell size={18} />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
             </button>
-            <OwnerAvatar />
+            <OwnerAvatar name={owner.name} />
           </div>
         </header>
 
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
 
-      {/* Auto-notify success toast */}
       {toastVisible && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 bg-emerald-600 text-white text-sm font-medium rounded-xl shadow-lg max-w-sm">
           <CheckCircle2 size={17} className="shrink-0" />
@@ -117,11 +126,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function OwnerAvatar() {
-  const { owner } = useOnboarding();
-  const initials = owner.name
-    ? owner.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
-    : "PG";
+function OwnerAvatar({ name }: { name: string }) {
+  const initials = name ? name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() : "PG";
   return (
     <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center ml-1">
       <span className="text-xs font-bold text-indigo-700">{initials}</span>

@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useOnboarding, PGProfile, OwnerProfile } from "@/store/OnboardingContext";
 import { usePlan, PLANS, PlanId } from "@/store/PlanContext";
+import { useAuth } from "@/store/AuthContext";
 import {
   Building2, User, ChevronRight, ChevronLeft, Plus, Trash2,
   CheckCircle2, Zap, Users, DoorOpen, MessageCircle, Download,
-  Check, Star,
+  Check, Star, Eye, EyeOff, Lock,
 } from "lucide-react";
 
 const inp = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-800 placeholder:text-gray-400";
@@ -54,6 +55,7 @@ const PLAN_HIGHLIGHTS: Record<PlanId, { label: string; included: boolean }[]> = 
 export default function OnboardingPage() {
   const { completeOnboarding, addPg, isOnboarded } = useOnboarding();
   const { plan, setPlan } = usePlan();
+  const { setPassword } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const isAddPgMode = searchParams.get("addPg") === "1";
@@ -70,6 +72,10 @@ export default function OnboardingPage() {
 
   // Step 1 — owner profile
   const [ownerForm, setOwnerForm] = useState<OwnerProfile>({ name: "", email: "", phone: "" });
+  const [password, setPassword_] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [pwdError, setPwdError] = useState("");
 
   // Step 2 — PG list
   const [pgDrafts, setPgDrafts] = useState<PgDraft[]>([
@@ -93,8 +99,12 @@ export default function OnboardingPage() {
 
   // ── Step 1 submit ─────────────────────────────────────────────────────────
 
-  function handleProfileSubmit(e: React.FormEvent) {
+  async function handleProfileSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (password.length < 6) { setPwdError("Password must be at least 6 characters."); return; }
+    if (password !== confirmPassword) { setPwdError("Passwords do not match."); return; }
+    setPwdError("");
+    await setPassword(password);
     goNext();
   }
 
@@ -210,38 +220,49 @@ export default function OnboardingPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1.5">Full Name *</label>
-                  <input
-                    required
-                    type="text"
-                    className={inp}
-                    placeholder="Ramesh Agarwal"
-                    value={ownerForm.name}
-                    onChange={(e) => setOwnerForm({ ...ownerForm, name: e.target.value })}
-                  />
+                  <input required type="text" className={inp} placeholder="Ramesh Agarwal"
+                    value={ownerForm.name} onChange={(e) => setOwnerForm({ ...ownerForm, name: e.target.value })} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Phone *</label>
-                    <input
-                      required
-                      type="tel"
-                      className={inp}
-                      placeholder="9876543210"
-                      value={ownerForm.phone}
-                      onChange={(e) => setOwnerForm({ ...ownerForm, phone: e.target.value })}
-                    />
+                    <input required type="tel" className={inp} placeholder="9876543210"
+                      value={ownerForm.phone} onChange={(e) => setOwnerForm({ ...ownerForm, phone: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1.5">Email *</label>
-                    <input
-                      required
-                      type="email"
-                      className={inp}
-                      placeholder="you@email.com"
-                      value={ownerForm.email}
-                      onChange={(e) => setOwnerForm({ ...ownerForm, email: e.target.value })}
-                    />
+                    <input required type="email" className={inp} placeholder="you@email.com"
+                      value={ownerForm.email} onChange={(e) => setOwnerForm({ ...ownerForm, email: e.target.value })} />
                   </div>
+                </div>
+
+                {/* Password */}
+                <div className="pt-2 border-t border-gray-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Lock size={13} className="text-indigo-500" />
+                    <span className="text-xs font-semibold text-gray-700">Set a login password</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">Password *</label>
+                      <div className="relative">
+                        <input required type={showPwd ? "text" : "password"} className={`${inp} pr-9`}
+                          placeholder="Min. 6 characters" value={password}
+                          onChange={(e) => { setPassword_(e.target.value); setPwdError(""); }} />
+                        <button type="button" onClick={() => setShowPwd((v) => !v)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                          {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1.5">Confirm Password *</label>
+                      <input required type={showPwd ? "text" : "password"} className={inp}
+                        placeholder="Re-enter password" value={confirmPassword}
+                        onChange={(e) => { setConfirmPassword(e.target.value); setPwdError(""); }} />
+                    </div>
+                  </div>
+                  {pwdError && <p className="text-xs text-red-500 mt-2">{pwdError}</p>}
                 </div>
               </div>
 
