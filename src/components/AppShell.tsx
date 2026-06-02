@@ -22,7 +22,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isPayPage = pathname.startsWith("/pay");
   const isOnboardingPage = pathname.startsWith("/onboarding");
   const isLoginPage = pathname.startsWith("/login");
-  const isFullscreen = isPayPage || isOnboardingPage || isLoginPage;
+  const isDemoPage = pathname.startsWith("/demo");
+  const isFullscreen = isPayPage || isOnboardingPage || isLoginPage || isDemoPage;
 
   const bothHydrated = authHydrated && onboardingHydrated;
 
