@@ -30,15 +30,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     if (!bothHydrated) return;
     if (isFullscreen) return;
 
-    if (!hasPassword) {
-      // Brand new user — must go through onboarding to set password
+    if (!hasPassword && !isOnboarded) {
+      // Brand-new user who hasn't set a password yet — send to onboarding
       router.push("/onboarding");
-    } else if (!isAuthenticated) {
+    } else if (hasPassword && !isAuthenticated) {
+      // Returning user with a password who isn't logged in — send to login
       router.push("/login");
     }
-    // isOnboarded check: after login, onboarding should be complete already
-    // but handle the edge case gracefully
-  }, [bothHydrated, hasPassword, isAuthenticated, isFullscreen, router]);
+    // hasPassword=false && isOnboarded=true → legacy user (onboarded before the auth
+    // feature was added). Let them through so they don't get a redirect loop.
+  }, [bothHydrated, hasPassword, isAuthenticated, isOnboarded, isFullscreen, router]);
 
   const { isEmailConfigured, isSmsConfigured } = useSettings();
   const notifyResult = useAutoNotify(
@@ -75,7 +76,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return <main className="h-full overflow-y-auto">{children}</main>;
   }
 
-  if (!hasPassword || !isAuthenticated) return null;
+  // Block render while redirecting: new user awaiting onboarding, or has a password but no session
+  if (!hasPassword && !isOnboarded) return null;
+  if (hasPassword && !isAuthenticated) return null;
 
   return (
     <div className="flex h-full">
