@@ -116,6 +116,9 @@ export default function DashboardPage() {
   }
 
   function sendAllReminders() {
+    if (!isUpiConfigured) {
+      addToast("⚠️ UPI ID not configured — messages sent without payment link. Go to Settings → Add UPI ID.", "error");
+    }
     dueReminders.forEach(({ payment: p, tenant: t }, i) => {
       if (!t) return;
       setTimeout(() => {
@@ -169,14 +172,22 @@ export default function DashboardPage() {
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
 
-      {/* UPI setup nudge — shown when UPI is not configured */}
-      {!isUpiConfigured && (
-        <div className="mb-5 flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
-          <Link2 size={16} className="text-blue-500 shrink-0" />
-          <p className="text-sm text-blue-700 flex-1">
-            <span className="font-semibold">No UPI ID configured.</span> WhatsApp reminders won&apos;t include a payment link until you add your UPI ID.
+      {/* UPI status — always visible so owner knows immediately */}
+      {isUpiConfigured ? (
+        <div className="mb-5 flex items-center gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+          <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+          <p className="text-sm text-emerald-700 flex-1">
+            UPI configured: <strong>{upi.upiId}</strong> — payment link will be included in WhatsApp reminders.
           </p>
-          <Link href="/settings" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors shrink-0">
+          <Link href="/settings" className="text-xs text-emerald-600 hover:underline shrink-0">Change</Link>
+        </div>
+      ) : (
+        <div className="mb-5 flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl">
+          <AlertCircle size={16} className="text-red-500 shrink-0" />
+          <p className="text-sm text-red-700 flex-1">
+            <span className="font-semibold">UPI ID not set up.</span> WhatsApp messages will be sent WITHOUT a payment link. Go to Settings and add your UPI ID to enable payments.
+          </p>
+          <Link href="/settings" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600 transition-colors shrink-0">
             Add UPI ID →
           </Link>
         </div>
