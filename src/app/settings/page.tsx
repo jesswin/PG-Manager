@@ -34,12 +34,11 @@ export default function SettingsPage() {
     }
   }, [upi.upiId, upiSynced]);
 
-  function handleUpiSave(e: React.SyntheticEvent<HTMLFormElement>) {
+  async function handleUpiSave(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    // enabled is implicit — if there's a valid UPI ID it's configured
-    updateUpi({ ...upiForm, enabled: upiForm.upiId.includes("@") });
+    await updateUpi({ ...upiForm, enabled: upiForm.upiId.includes("@") });
     setUpiSaved(true);
-    addToast("UPI settings saved.", "success");
+    addToast("UPI settings saved successfully.", "success");
     setTimeout(() => setUpiSaved(false), 3000);
   }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { supabase, isSupabaseEnabled } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/store/AuthContext";
 
 // ── UPI Configuration ─────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
 
 // ── Room Configuration ────────────────────────────────────────────────────────
 
-export const DEFAULT_FLOORS    = ["Ground Floor", "Floor 1", "Floor 2", "Floor 3"];
+export const DEFAULT_FLOORS     = ["Ground Floor", "Floor 1", "Floor 2", "Floor 3"];
 export const DEFAULT_ROOM_TYPES = ["Single", "Double", "Triple"];
 const ROOM_CONFIG_KEY = "pgm_room_config";
 
@@ -36,7 +36,7 @@ const ROOM_CONFIG_KEY = "pgm_room_config";
 
 interface SettingsContextType {
   upi: UpiConfig;
-  updateUpi: (cfg: Partial<UpiConfig>) => void;
+  updateUpi: (cfg: Partial<UpiConfig>) => Promise<void>;
   isUpiConfigured: boolean;
   notifPrefs: NotificationPrefs;
   updateNotifPrefs: (prefs: Partial<NotificationPrefs>) => void;
@@ -50,7 +50,7 @@ interface SettingsContextType {
 
 const SettingsContext = createContext<SettingsContextType>({
   upi: DEFAULT_UPI,
-  updateUpi: () => {},
+  updateUpi: async () => {},
   isUpiConfigured: false,
   notifPrefs: DEFAULT_NOTIFICATION_PREFS,
   updateNotifPrefs: () => {},
@@ -65,17 +65,17 @@ const SettingsContext = createContext<SettingsContextType>({
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
 
-  const [upi, setUpi]             = useState<UpiConfig>(DEFAULT_UPI);
+  const [upi, setUpi]               = useState<UpiConfig>(DEFAULT_UPI);
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
-  const [floors, setFloors]       = useState<string[]>(DEFAULT_FLOORS);
-  const [roomTypes, setRoomTypes] = useState<string[]>(DEFAULT_ROOM_TYPES);
+  const [floors, setFloors]         = useState<string[]>(DEFAULT_FLOORS);
+  const [roomTypes, setRoomTypes]   = useState<string[]>(DEFAULT_ROOM_TYPES);
 
-  // ── Load settings ────────────────────────────────────────────────────────────
-
+  // ── Load settings when user changes ─────────────────────────────────────────
+  // Priority: Supabase user_metadata → localStorage fallback
   useEffect(() => {
-    // Always load room config from localStorage (device-specific)
+    // Room config is always device-local
     try {
       const savedRoom = localStorage.getItem(ROOM_CONFIG_KEY);
       if (savedRoom) {
@@ -85,113 +85,107 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }
     } catch { /* ignore */ }
 
-    if (isSupabaseEnabled && supabase && isAuthenticated && user) {
-      // Load UPI + notif prefs from Supabase — synced across devices
-      loadFromSupabase(user.id);
+    if (user?.user_metadata) {
+      // Supabase: read from auth user_metadata (no extra table needed)
+      const meta = user.user_metadata;
+      if (meta.upi_id) {
+        setUpi({
+          upiId:   meta.upi_id   ?? "",
+          upiName: meta.upi_name ?? "",
+          enabled: !!(meta.upi_id?.includes("@")),
+        });
+      } else {
+        // No Supabase metadata yet — try localStorage migration
+        loadUpiFromLocalStorage();
+      }
+      if (meta.notif_auto_send !== undefined || meta.notif_days_before_due !== undefined) {
+        setNotifPrefs({
+          autoSendEnabled: meta.notif_auto_send    ?? true,
+          daysBeforeDue:   meta.notif_days_before_due ?? 3,
+        });
+      } else {
+        loadNotifFromLocalStorage();
+      }
     } else {
-      // Local mode: read from localStorage
-      loadFromLocalStorage();
+      // No Supabase user — use localStorage only
+      loadUpiFromLocalStorage();
+      loadNotifFromLocalStorage();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, user?.id]);
+  }, [user?.id, user?.user_metadata?.upi_id]); // re-run when UPI saved
 
-  async function loadFromSupabase(userId: string) {
-    if (!supabase) return;
-    const { data } = await supabase
-      .from("owner_settings")
-      .select("*")
-      .eq("owner_id", userId)
-      .maybeSingle();
-
-    if (data) {
-      setUpi({
-        upiId: data.upi_id ?? "",
-        upiName: data.upi_name ?? "",
-        enabled: !!(data.upi_id && data.upi_id.includes("@")),
-      });
-      setNotifPrefs({
-        autoSendEnabled: data.notif_auto_send ?? true,
-        daysBeforeDue: data.notif_days_before_due ?? 3,
-      });
-    } else {
-      // No DB row yet — check localStorage as migration fallback
-      loadFromLocalStorage(false);
-    }
+  function loadUpiFromLocalStorage() {
+    try {
+      const saved = localStorage.getItem("pgm_upi_config");
+      if (saved) setUpi({ ...DEFAULT_UPI, ...JSON.parse(saved) });
+    } catch { /* ignore */ }
   }
 
-  function loadFromLocalStorage(setRoomConfigToo = true) {
+  function loadNotifFromLocalStorage() {
     try {
-      const savedUpi = localStorage.getItem("pgm_upi_config");
-      if (savedUpi) setUpi({ ...DEFAULT_UPI, ...JSON.parse(savedUpi) });
-
-      const savedNotif = localStorage.getItem("pgm_notif_prefs");
-      if (savedNotif) setNotifPrefs({ ...DEFAULT_NOTIFICATION_PREFS, ...JSON.parse(savedNotif) });
+      const saved = localStorage.getItem("pgm_notif_prefs");
+      if (saved) setNotifPrefs({ ...DEFAULT_NOTIFICATION_PREFS, ...JSON.parse(saved) });
     } catch { /* ignore */ }
   }
 
   // ── Update UPI ───────────────────────────────────────────────────────────────
 
-  function updateUpi(cfg: Partial<UpiConfig>) {
-    setUpi((prev) => {
-      const next = { ...prev, ...cfg, enabled: !!(cfg.upiId ?? prev.upiId)?.includes("@") };
-      // Always save to localStorage as offline backup
-      localStorage.setItem("pgm_upi_config", JSON.stringify(next));
-      // Save to Supabase (persists across devices/deployments)
-      if (supabase && user) {
-        supabase.from("owner_settings").upsert({
-          owner_id: user.id,
-          upi_id: next.upiId,
-          upi_name: next.upiName,
-          updated_at: new Date().toISOString(),
-        }).then(() => {}, () => {});
-      }
-      return next;
-    });
-  }
+  const updateUpi = async (cfg: Partial<UpiConfig>) => {
+    const next: UpiConfig = {
+      ...upi,
+      ...cfg,
+      enabled: !!(cfg.upiId ?? upi.upiId)?.includes("@"),
+    };
+    setUpi(next);
+
+    // Always save locally
+    localStorage.setItem("pgm_upi_config", JSON.stringify(next));
+
+    // Save to Supabase user_metadata (syncs across ALL devices + deployments)
+    if (supabase) {
+      try {
+        await supabase.auth.updateUser({
+          data: { upi_id: next.upiId, upi_name: next.upiName },
+        });
+      } catch { /* ignore — localStorage is the fallback */ }
+    }
+  };
 
   // ── Update notification prefs ─────────────────────────────────────────────────
 
-  function updateNotifPrefs(prefs: Partial<NotificationPrefs>) {
-    setNotifPrefs((prev) => {
-      const next = { ...prev, ...prefs };
-      localStorage.setItem("pgm_notif_prefs", JSON.stringify(next));
-      if (supabase && user) {
-        supabase.from("owner_settings").upsert({
-          owner_id: user.id,
-          notif_auto_send: next.autoSendEnabled,
+  const updateNotifPrefs = (prefs: Partial<NotificationPrefs>) => {
+    const next = { ...notifPrefs, ...prefs };
+    setNotifPrefs(next);
+    localStorage.setItem("pgm_notif_prefs", JSON.stringify(next));
+    if (supabase) {
+      supabase.auth.updateUser({
+        data: {
+          notif_auto_send:       next.autoSendEnabled,
           notif_days_before_due: next.daysBeforeDue,
-          updated_at: new Date().toISOString(),
-        }).then(() => {}, () => {});
-      }
-      return next;
-    });
-  }
+        },
+      }).then(() => {}, () => {});
+    }
+  };
 
-  // ── Room config (localStorage only — device preference) ────────────────────
+  // ── Room config (localStorage only) ──────────────────────────────────────────
 
   function saveRoomConfig(f: string[], t: string[]) {
     try { localStorage.setItem(ROOM_CONFIG_KEY, JSON.stringify({ floors: f, roomTypes: t })); } catch { /* ignore */ }
   }
-
   function addFloor(floor: string) {
     const v = floor.trim();
     if (!v || floors.includes(v)) return;
-    const next = [...floors, v];
-    setFloors(next); saveRoomConfig(next, roomTypes);
+    const next = [...floors, v]; setFloors(next); saveRoomConfig(next, roomTypes);
   }
   function removeFloor(floor: string) {
-    const next = floors.filter((f) => f !== floor);
-    setFloors(next); saveRoomConfig(next, roomTypes);
+    const next = floors.filter((f) => f !== floor); setFloors(next); saveRoomConfig(next, roomTypes);
   }
   function addRoomType(type: string) {
     const v = type.trim();
     if (!v || roomTypes.includes(v)) return;
-    const next = [...roomTypes, v];
-    setRoomTypes(next); saveRoomConfig(floors, next);
+    const next = [...roomTypes, v]; setRoomTypes(next); saveRoomConfig(floors, next);
   }
   function removeRoomType(type: string) {
-    const next = roomTypes.filter((t) => t !== type);
-    setRoomTypes(next); saveRoomConfig(floors, next);
+    const next = roomTypes.filter((t) => t !== type); setRoomTypes(next); saveRoomConfig(floors, next);
   }
 
   const isUpiConfigured = upi.upiId.trim().length > 3 && upi.upiId.includes("@");
