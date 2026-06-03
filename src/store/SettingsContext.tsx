@@ -133,7 +133,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setRoomTypes(next); saveRoomConfig(floors, next);
   }
 
-  const isUpiConfigured = upi.enabled && upi.upiId.trim().length > 3 && upi.upiId.includes("@");
+  // A valid UPI VPA (contains @) is all that's needed — no separate 'enabled' flag required.
+  const isUpiConfigured = upi.upiId.trim().length > 3 && upi.upiId.includes("@");
 
   return (
     <SettingsContext.Provider value={{

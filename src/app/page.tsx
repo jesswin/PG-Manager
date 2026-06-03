@@ -169,6 +169,19 @@ export default function DashboardPage() {
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
 
+      {/* UPI setup nudge — shown when UPI is not configured */}
+      {!isUpiConfigured && (
+        <div className="mb-5 flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+          <Link2 size={16} className="text-blue-500 shrink-0" />
+          <p className="text-sm text-blue-700 flex-1">
+            <span className="font-semibold">No UPI ID configured.</span> WhatsApp reminders won&apos;t include a payment link until you add your UPI ID.
+          </p>
+          <Link href="/settings" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors shrink-0">
+            Add UPI ID →
+          </Link>
+        </div>
+      )}
+
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-gray-500 text-sm mt-1">
@@ -269,7 +282,7 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 shrink-0">
             {!isUpiConfigured && (
               <Link href="/settings" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-amber-200 text-amber-700 text-xs font-semibold rounded-lg hover:bg-amber-50 transition-colors">
-                <Link2 size={12} /> Add Key
+                <Link2 size={12} /> Add UPI ID
               </Link>
             )}
             {can("whatsappBulk") ? (

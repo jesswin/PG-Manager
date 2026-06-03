@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSettings } from "@/store/SettingsContext";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import { ToastContainer, useToast } from "@/components/Toast";
@@ -24,8 +24,19 @@ export default function SettingsPage() {
   const [newFloor, setNewFloor] = useState("");
   const [newRoomType, setNewRoomType] = useState("");
 
+  // SettingsContext loads from localStorage asynchronously after first render.
+  // Sync upiForm once the real value arrives so the form shows the saved UPI ID.
+  const [upiSynced, setUpiSynced] = useState(false);
+  useEffect(() => {
+    if (!upiSynced && upi.upiId) {
+      setUpiForm({ ...upi });
+      setUpiSynced(true);
+    }
+  }, [upi.upiId, upiSynced]);
+
   function handleUpiSave(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    // enabled is implicit — if there's a valid UPI ID it's configured
     updateUpi({ ...upiForm, enabled: upiForm.upiId.includes("@") });
     setUpiSaved(true);
     addToast("UPI settings saved.", "success");
