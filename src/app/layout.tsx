@@ -7,8 +7,8 @@ import { AppProvider } from "@/store/AppContext";
 import AppShell from "@/components/AppShell";
 
 export const metadata = {
-  title: "PG Manager – Admin Panel",
-  description: "PG Management SaaS Application",
+  title: "PGNest – Admin Panel",
+  description: "PGNest SaaS Application",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

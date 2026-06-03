@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 // Email is sent from the platform admin's Resend account.
 // Set these in Vercel environment variables — owners don't need their own account.
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FROM_NAME      = process.env.RESEND_FROM_NAME ?? "PG Manager";
+const FROM_NAME      = process.env.RESEND_FROM_NAME ?? "PGNest";
 const FROM_EMAIL     = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
 
 export async function POST(req: NextRequest) {

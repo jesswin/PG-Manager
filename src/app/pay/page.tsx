@@ -15,8 +15,8 @@ function PaymentContent() {
   const amount  = Number(params.get("amount") || "0");
   const month   = params.get("month") || "";
   const upiId   = params.get("upi") || "";
-  const upiName = params.get("upiName") || params.get("pg") || "PG Manager";
-  const pgName  = params.get("pg") || "PG Manager";
+  const upiName = params.get("upiName") || params.get("pg") || "PGNest";
+  const pgName  = params.get("pg") || "PGNest";
 
   const [copied, setCopied] = useState(false);
 

@@ -81,7 +81,7 @@ export function useAutoNotify(enabled: boolean): AutoNotifyResult {
       cutoff.setDate(today.getDate() + (notifPrefs.daysBeforeDue ?? 3));
 
       const due = payments.filter((p) => p.status !== "Paid" && new Date(p.dueDate) <= cutoff);
-      const pgName = activePg?.name || "PG Manager";
+      const pgName = activePg?.name || "PGNest";
       let sent = 0;
       const errors: string[] = [];
 

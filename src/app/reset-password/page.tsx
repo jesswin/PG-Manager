@@ -59,7 +59,7 @@ export default function ResetPasswordPage() {
           <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg mb-4">
             <Building2 size={24} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">PG Manager</h1>
+          <h1 className="text-2xl font-bold text-gray-900">PGNest</h1>
           <p className="text-sm text-gray-500 mt-1">Set your new password</p>
         </div>
 

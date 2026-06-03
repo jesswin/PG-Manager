@@ -91,8 +91,8 @@ export default function PaymentsPage() {
     const link = buildUpiPayPageUrl({
       tenantName: p.tenantName, roomNumber: p.roomNumber,
       amount: p.amount, month: p.month, phone: t?.phone || "",
-      upiId: upi.upiId, upiName: upi.upiName || "PG Manager",
-      pgName: upi.upiName || "PG Manager",
+      upiId: upi.upiId, upiName: upi.upiName || "PGNest",
+      pgName: upi.upiName || "PGNest",
     });
     const msg =
       `Dear ${p.tenantName.split(" ")[0]},\n\n` +
@@ -102,7 +102,7 @@ export default function PaymentsPage() {
       `UPI ID: *${upi.upiId}*\n` +
       `Amount: *₹${p.amount.toLocaleString("en-IN")}*\n` +
       `Remarks: Room ${p.roomNumber} ${p.month}\n\n` +
-      `Thank you! 🙏\n— PG Manager`;
+      `Thank you! 🙏\n— PGNest`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   }
 

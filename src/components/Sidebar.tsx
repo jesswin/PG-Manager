@@ -70,7 +70,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <Building2 size={18} className="text-white" />
               </div>
               <div>
-                <p className="text-sm font-bold text-gray-900 leading-none">PG Manager</p>
+                <p className="text-sm font-bold text-gray-900 leading-none">PGNest</p>
                 <p className="text-xs text-gray-500 mt-0.5">Admin Panel</p>
               </div>
             </div>

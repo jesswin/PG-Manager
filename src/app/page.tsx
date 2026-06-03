@@ -103,8 +103,8 @@ export default function DashboardPage() {
     return buildUpiPayPageUrl({
       tenantName: p.tenantName, roomNumber: p.roomNumber,
       amount: p.amount, month: p.month, phone: t.phone,
-      upiId: upi.upiId, upiName: upi.upiName || activePg?.name || "PG Manager",
-      pgName: activePg?.name || "PG Manager",
+      upiId: upi.upiId, upiName: upi.upiName || activePg?.name || "PGNest",
+      pgName: activePg?.name || "PGNest",
     });
   }
 

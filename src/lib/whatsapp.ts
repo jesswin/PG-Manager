@@ -19,7 +19,7 @@ export function rentReminderMessage(
     `Dear ${tenantName},\n\n` +
     `This is a friendly reminder that your rent of *₹${amount.toLocaleString("en-IN")}* for *${month}* (Room ${roomNumber}) is${due ? ` due on *${due}*` : " pending"}.\n\n` +
     `Please make the payment at the earliest to avoid any late fees.\n\n` +
-    `Thank you! 🙏\n— PG Manager`
+    `Thank you! 🙏\n— PGNest`
   );
 }
 
@@ -55,6 +55,6 @@ export function rentReminderWithLink(
     `Your rent of *₹${amount.toLocaleString("en-IN")}* for *${month}* (Room ${roomNumber}) is${due ? ` due on *${due}*` : " pending"}.` +
     linkSection +
     upiSection +
-    `\n\nThank you! 🙏\n— PG Manager`
+    `\n\nThank you! 🙏\n— PGNest`
   );
 }

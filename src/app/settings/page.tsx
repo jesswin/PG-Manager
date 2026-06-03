@@ -157,7 +157,7 @@ export default function SettingsPage() {
             <div className="flex items-start gap-3 p-3.5 bg-purple-50 rounded-lg border border-purple-100 text-xs text-purple-700">
               <Zap size={14} className="shrink-0 mt-0.5 text-purple-500" fill="currentColor" />
               <span>
-                Email and SMS/WhatsApp notifications are set up centrally by the PG Manager team. You don&apos;t need any API keys. Just control <strong>when</strong> reminders go out below.
+                Email and SMS/WhatsApp notifications are set up centrally by the PGNest team. You don&apos;t need any API keys. Just control <strong>when</strong> reminders go out below.
               </span>
             </div>
 

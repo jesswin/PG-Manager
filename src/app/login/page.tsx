@@ -58,7 +58,7 @@ export default function LoginPage() {
   }
 
   function handleLocalReset() {
-    if (!confirm("This will permanently delete all your PG Manager data. Are you sure?")) return;
+    if (!confirm("This will permanently delete all your PGNest data. Are you sure?")) return;
     localStorage.clear();
     sessionStorage.clear();
     window.location.href = "/onboarding";
@@ -80,7 +80,7 @@ export default function LoginPage() {
           <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg mb-4">
             <Building2 size={24} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">PG Manager</h1>
+          <h1 className="text-2xl font-bold text-gray-900">PGNest</h1>
           <p className="text-sm text-gray-500 mt-1">Sign in to continue</p>
         </div>
 

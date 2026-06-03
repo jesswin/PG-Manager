@@ -39,7 +39,7 @@ export default function NoticesPage() {
   }
 
   async function dispatchNotifications(title: string, message: string, recipientId: string) {
-    const pgName = activePg?.name || "PG Manager";
+    const pgName = activePg?.name || "PGNest";
     const targets = recipientId === "all" ? tenants : tenants.filter((t) => t.id === recipientId);
     for (const t of targets) {
       // Emails and SMS use server-side API keys — no credentials needed here

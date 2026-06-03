@@ -29,18 +29,18 @@ const FEATURES = [
     icon: MessageCircle,
     color: "emerald",
     title: "Auto WhatsApp & Email Reminders",
-    desc: "PG Manager automatically sends rent reminders via WhatsApp and email when due dates are near. Zero manual effort needed.",
+    desc: "PGNest automatically sends rent reminders via WhatsApp and email when due dates are near. Zero manual effort needed.",
   },
   {
     icon: CreditCard,
     color: "blue",
     title: "Online Rent Collection",
-    desc: "Integrate Razorpay to send payment links via WhatsApp. Tenants pay via UPI, card, or net banking — you get notified instantly.",
+    desc: "Send UPI payment links via WhatsApp. Tenants tap and pay instantly using GPay, PhonePe, Paytm or any UPI app.",
   },
   {
     icon: Building2,
     color: "orange",
-    title: "Multi-PG Management",
+    title: "Multi-PGNest",
     desc: "Own multiple PGs? Manage all of them from one account. Switch between properties with a single click in the sidebar.",
   },
   {
@@ -77,7 +77,7 @@ const PLANS = [
     features: [
       "Up to 20 tenants & 30 rooms",
       "WhatsApp individual reminders",
-      "Razorpay payment links",
+      "UPI payment links",
       "Send & manage notices",
       "Export payments as CSV",
       "Email auto-notifications",
@@ -111,7 +111,7 @@ const TESTIMONIALS = [
     pg: "Sunshine PG, Bangalore",
     initials: "RA",
     color: "indigo",
-    text: "I used to spend every weekend calling tenants for rent. Now PG Manager does it automatically. Best ₹499 I've ever spent — saved me hours every month.",
+    text: "I used to spend every weekend calling tenants for rent. Now PGNest does it automatically. Best ₹499 I've ever spent — saved me hours every month.",
     stars: 5,
   },
   {
@@ -119,7 +119,7 @@ const TESTIMONIALS = [
     pg: "Green Hostel (3 PGs), Pune",
     initials: "PD",
     color: "purple",
-    text: "Managing 3 PGs was a nightmare in Excel. With PG Manager I can switch between properties in seconds, and the payment links via WhatsApp have cut my pending rent by 70%.",
+    text: "Managing 3 PGs was a nightmare in Excel. With PGNest I can switch between properties in seconds, and the payment links via WhatsApp have cut my pending rent by 70%.",
     stars: 5,
   },
   {
@@ -134,12 +134,12 @@ const TESTIMONIALS = [
 
 const FAQS = [
   {
-    q: "Do I need any technical knowledge to use PG Manager?",
-    a: "Not at all. PG Manager is designed for PG owners, not developers. You can set up your entire PG in under 10 minutes with our step-by-step onboarding.",
+    q: "Do I need any technical knowledge to use PGNest?",
+    a: "Not at all. PGNest is designed for PG owners, not developers. You can set up your entire PG in under 10 minutes with our step-by-step onboarding.",
   },
   {
     q: "How does the WhatsApp reminder work?",
-    a: "When rent is due within your configured days, PG Manager automatically opens a pre-filled WhatsApp message to your tenant (including a payment link if Razorpay is configured). You just approve and send — or enable bulk send to do all at once.",
+    a: "When rent is due within your configured days, PGNest automatically opens a pre-filled WhatsApp message to your tenant (including a payment link if Razorpay is configured). You just approve and send — or enable bulk send to do all at once.",
   },
   {
     q: "Is my tenant data safe?",
@@ -180,7 +180,7 @@ export default function DemoPage() {
             <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
               <Building2 size={15} className="text-white" />
             </div>
-            <span className="text-sm font-bold text-gray-900">PG Manager</span>
+            <span className="text-sm font-bold text-gray-900">PGNest</span>
           </div>
           <div className="hidden sm:flex items-center gap-6 text-sm text-gray-600">
             <a href="#features" className="hover:text-gray-900 transition-colors">Features</a>
@@ -214,7 +214,7 @@ export default function DemoPage() {
             </h1>
             <p className="text-lg sm:text-xl text-gray-500 max-w-2xl mb-8 leading-relaxed">
               Tenants, rooms, payments, and reminders — all in one beautiful dashboard.
-              Stop chasing rent on WhatsApp. Let PG Manager do it for you.
+              Stop chasing rent on WhatsApp. Let PGNest do it for you.
             </p>
             <div className="flex flex-col sm:flex-row items-center gap-3">
               <button
@@ -255,7 +255,7 @@ export default function DemoPage() {
                     <div className="w-5 h-5 bg-indigo-600 rounded-md flex items-center justify-center">
                       <Building2 size={10} className="text-white" />
                     </div>
-                    <span className="text-xs font-bold text-gray-800">PG Manager</span>
+                    <span className="text-xs font-bold text-gray-800">PGNest</span>
                   </div>
                   {["Dashboard", "Tenants", "Rooms", "Payments", "Notices"].map((item, i) => (
                     <div key={item} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 text-xs font-medium ${i === 0 ? "bg-indigo-600 text-white" : "text-gray-500"}`}>
@@ -336,7 +336,7 @@ export default function DemoPage() {
               Everything you need to run your PG
             </h2>
             <p className="text-lg text-gray-500 max-w-xl mx-auto">
-              From tenant onboarding to automated rent collection — PG Manager handles it all.
+              From tenant onboarding to automated rent collection — PGNest handles it all.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -368,7 +368,7 @@ export default function DemoPage() {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-extrabold text-gray-900 mb-3">Sound familiar?</h2>
-            <p className="text-gray-500">Most PG owners spend hours on tasks that PG Manager handles in seconds.</p>
+            <p className="text-gray-500">Most PG owners spend hours on tasks that PGNest handles in seconds.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* Before */}
@@ -377,7 +377,7 @@ export default function DemoPage() {
                 <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
                   <span className="text-red-500 font-bold text-sm">✗</span>
                 </div>
-                <span className="font-bold text-gray-800">Without PG Manager</span>
+                <span className="font-bold text-gray-800">Without PGNest</span>
               </div>
               <ul className="space-y-3">
                 {[
@@ -400,7 +400,7 @@ export default function DemoPage() {
                 <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
                   <span className="text-emerald-600 font-bold text-sm">✓</span>
                 </div>
-                <span className="font-bold text-gray-800">With PG Manager</span>
+                <span className="font-bold text-gray-800">With PGNest</span>
               </div>
               <ul className="space-y-3">
                 {[
@@ -408,7 +408,7 @@ export default function DemoPage() {
                   "Live dashboard with real-time occupancy and payments",
                   "Instant visibility — vacant rooms highlighted at a glance",
                   "Complete digital profiles with ID proofs, amenities, notes",
-                  "Razorpay payment links sent right through WhatsApp",
+                  "UPI payment links sent right through WhatsApp",
                   "Digital notices delivered instantly to all tenants",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2.5 text-sm text-gray-600">
@@ -449,7 +449,7 @@ export default function DemoPage() {
                 icon: Zap,
                 color: "emerald",
                 title: "Sit back & collect rent",
-                desc: "Add tenants with due dates. PG Manager handles reminders, payment links, and notices automatically.",
+                desc: "Add tenants with due dates. PGNest handles reminders, payment links, and notices automatically.",
               },
             ].map(({ step, icon: Icon, color, title, desc }) => {
               const colors: Record<string, { bg: string; text: string; ring: string }> = {
@@ -669,7 +669,7 @@ export default function DemoPage() {
             <div className="w-6 h-6 bg-indigo-600 rounded-md flex items-center justify-center">
               <Building2 size={13} className="text-white" />
             </div>
-            <span className="text-sm font-bold text-white">PG Manager</span>
+            <span className="text-sm font-bold text-white">PGNest</span>
           </div>
           <p className="text-xs text-gray-500 text-center">
             Built for PG owners across India. All data stored locally on your device.

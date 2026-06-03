@@ -54,7 +54,7 @@ export default function SlidesPage() {
           <div className="w-6 h-6 bg-indigo-600 rounded-md flex items-center justify-center">
             <Building2 size={13} className="text-white" />
           </div>
-          <span className="text-xs font-bold text-white">PG Manager</span>
+          <span className="text-xs font-bold text-white">PGNest</span>
           <span className="text-gray-600 text-xs ml-2">Presentation</span>
         </div>
         <div className="flex items-center gap-3">
@@ -129,10 +129,10 @@ function TitleSlide() {
         <Building2 size={34} className="text-white" />
       </div>
       <h1 className="text-5xl sm:text-6xl font-extrabold text-white mb-4 tracking-tight">
-        PG Manager
+        PGNest
       </h1>
       <p className="text-xl sm:text-2xl text-indigo-200 font-medium mb-10 max-w-xl">
-        Smart PG Management for Modern Owners
+        Smart PGNest for Modern Owners
       </p>
       <div className="flex flex-wrap justify-center gap-3">
         {["Tenants", "Rooms", "Payments", "Reminders", "Notices"].map((tag) => (
@@ -184,7 +184,7 @@ function SolutionSlide() {
     <div className="h-full flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 to-indigo-950 px-8">
       <div className="max-w-3xl w-full text-center">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-500/20 text-indigo-300 text-sm font-semibold rounded-full mb-8 border border-indigo-500/30">
-          <Zap size={13} fill="currentColor" /> Introducing PG Manager
+          <Zap size={13} fill="currentColor" /> Introducing PGNest
         </div>
         <h2 className="text-4xl font-extrabold text-white mb-4">
           One Dashboard.<br />
