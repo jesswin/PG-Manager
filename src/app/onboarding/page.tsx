@@ -8,7 +8,7 @@ import { useAuth } from "@/store/AuthContext";
 import {
   Building2, User, ChevronRight, ChevronLeft, Plus, Trash2,
   CheckCircle2, Zap, Users, DoorOpen, MessageCircle, Download,
-  Check, Star, Eye, EyeOff, Lock, Mail,
+  Check, Star, Eye, EyeOff, Lock, Mail, AlertCircle,
 } from "lucide-react";
 
 const inp = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-800 placeholder:text-gray-400";
@@ -55,53 +55,65 @@ const PLAN_HIGHLIGHTS: Record<PlanId, { label: string; included: boolean }[]> = 
 export default function OnboardingPage() {
   const { completeOnboarding, addPg, isOnboarded, hydrated: onboardingHydrated } = useOnboarding();
   const { plan, setPlan } = usePlan();
-  const { signUp, isSupabase, isAuthenticated, hydrated: authHydrated } = useAuth();
+  const { signUp, isSupabase, isAuthenticated, hydrated: authHydrated, resendConfirmation } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const isAddPgMode = searchParams.get("addPg") === "1";
 
-  // Wait for both contexts to hydrate before deciding where to send the user.
-  // If already onboarded:
-  //   - authenticated → dashboard
-  //   - NOT authenticated (session expired) → /login  ← key fix: NOT /demo
+  // If already onboarded: dashboard (if authenticated) or login (if not)
   useEffect(() => {
     if (!authHydrated || !onboardingHydrated) return;
     if (!isOnboarded || isAddPgMode) return;
     router.replace(isAuthenticated ? "/" : "/login");
   }, [authHydrated, onboardingHydrated, isOnboarded, isAddPgMode, isAuthenticated, router]);
 
-  // In add-PG mode, skip to step 2
+  // Authenticated but not onboarded (e.g. returned after email confirmation) → skip Step 0
   const [step, setStep] = useState(isAddPgMode ? 1 : 0);
+  useEffect(() => {
+    if (!authHydrated) return;
+    if (isAuthenticated && step === 0) setStep(1);
+  }, [authHydrated, isAuthenticated]);
 
-  // Step 1 — owner profile
+  // Step 0 — owner profile
   const [ownerForm, setOwnerForm] = useState<OwnerProfile>({ name: "", email: "", phone: "" });
   const [password, setPassword_] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [pwdError, setPwdError] = useState("");
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMsg, setResendMsg] = useState("");
 
-  // Step 2 — PG list
+  // Auto-advance to Step 1 the moment Supabase fires SIGNED_IN (email confirmed)
+  useEffect(() => {
+    if (!needsEmailConfirm) return;
+    if (typeof window === "undefined") return;
+    const { supabase: sb } = require("@/lib/supabase");
+    if (!sb) return;
+    const { data: { subscription } } = sb.auth.onAuthStateChange((event: string) => {
+      if (event === "SIGNED_IN") {
+        setNeedsEmailConfirm(false);
+        setStep(1);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [needsEmailConfirm]);
+
+  // Step 1 — PG list
   const [pgDrafts, setPgDrafts] = useState<PgDraft[]>([
     { tempId: "pg0", name: "", address: "", city: "" },
   ]);
 
-  // Step 3 — plan (default to current plan)
+  // Step 2 — plan
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(plan.id);
+  const [finishing, setFinishing] = useState(false);
 
   const progress = ((step + 1) / STEPS.length) * 100;
 
-  // ── Navigation ────────────────────────────────────────────────────────────
+  function goNext() { setStep((s) => Math.min(s + 1, STEPS.length - 1)); }
+  function goBack() { setStep((s) => Math.max(s - 1, 0)); }
 
-  function goNext() {
-    setStep((s) => Math.min(s + 1, STEPS.length - 1));
-  }
-
-  function goBack() {
-    setStep((s) => Math.max(s - 1, 0));
-  }
-
-  // ── Step 1 submit ─────────────────────────────────────────────────────────
+  // ── Step 0 submit ─────────────────────────────────────────────────────────
 
   async function handleProfileSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -111,12 +123,18 @@ export default function OnboardingPage() {
     const { error, needsEmailConfirmation } = await signUp(ownerForm.email, password);
     if (error) { setPwdError(error); return; }
     if (needsEmailConfirmation) {
-      // Supabase email confirmations are ON — show "check your inbox" screen.
-      // After confirming, the user will be auto-redirected to /onboarding to continue.
       setNeedsEmailConfirm(true);
       return;
     }
     goNext();
+  }
+
+  async function handleResend() {
+    setResendLoading(true);
+    setResendMsg("");
+    const { error } = await resendConfirmation(ownerForm.email);
+    setResendLoading(false);
+    setResendMsg(error ? `Failed: ${error}` : "Verification email resent!");
   }
 
   // ── Step 2: PG management ─────────────────────────────────────────────────
@@ -149,9 +167,10 @@ export default function OnboardingPage() {
     goNext();
   }
 
-  // ── Step 3: finish ────────────────────────────────────────────────────────
+  // ── Step 2: finish ───────────────────────────────────────────────────────
 
-  function handleFinish() {
+  async function handleFinish() {
+    setFinishing(true);
     setPlan(selectedPlan);
     const pgList: PGProfile[] = pgDrafts.map((d, i) => ({
       id: `pg${Date.now() + i}`,
@@ -159,8 +178,9 @@ export default function OnboardingPage() {
       address: d.address,
       city: d.city,
     }));
-    completeOnboarding(ownerForm, pgList);
-    router.push("/");
+    await completeOnboarding(ownerForm, pgList);
+    // Hard navigation so dashboard always loads fresh with the new onboarding state
+    window.location.href = "/";
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -217,24 +237,42 @@ export default function OnboardingPage() {
         <div className="w-full max-w-xl">
           {/* ── Step 0: Owner Profile ──────────────────────────── */}
           {step === 0 && needsEmailConfirm && (
-            <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-8 text-center">
-              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                <Mail size={30} className="text-emerald-600" />
+            <div className="bg-white rounded-2xl border border-amber-300 shadow-sm p-8 text-center">
+              {/* Warning banner */}
+              <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl mb-6 text-left">
+                <AlertCircle size={18} className="text-amber-600 shrink-0" />
+                <p className="text-sm text-amber-800 font-semibold">
+                  Please confirm your email before continuing
+                </p>
               </div>
-              <h1 className="text-xl font-bold text-gray-900 mb-2">Check your inbox!</h1>
-              <p className="text-sm text-gray-500 mb-4 leading-relaxed">
-                We sent a confirmation link to <strong>{ownerForm.email}</strong>.
-                <br />Click the link in the email to verify your account.
+
+              <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Mail size={28} className="text-indigo-600" />
+              </div>
+              <h1 className="text-lg font-bold text-gray-900 mb-1">Verify your email</h1>
+              <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+                A verification link was sent to <strong className="text-gray-800">{ownerForm.email}</strong>
               </p>
-              <div className="bg-indigo-50 rounded-xl p-4 text-xs text-indigo-700 text-left">
-                <p className="font-semibold mb-1">After confirming your email:</p>
-                <ol className="list-decimal list-inside space-y-1 text-indigo-600">
-                  <li>Click the confirmation link in the email</li>
-                  <li>You'll be signed in automatically</li>
-                  <li>You'll be brought back here to finish setting up your PG</li>
-                </ol>
+
+              <div className="bg-gray-50 rounded-xl p-4 text-xs text-gray-600 text-left mb-5 space-y-2">
+                <p className="font-semibold text-gray-700 mb-1">What to do:</p>
+                <div className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold flex items-center justify-center shrink-0">1</span> Open the email from PG Manager</div>
+                <div className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold flex items-center justify-center shrink-0">2</span> Click the <strong>Confirm your mail</strong> button</div>
+                <div className="flex items-center gap-2"><span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold flex items-center justify-center shrink-0">3</span> You&apos;ll be automatically brought back to continue setup</div>
               </div>
-              <p className="text-xs text-gray-400 mt-4">Didn&apos;t receive it? Check your spam folder.</p>
+
+              <div className="flex flex-col gap-2">
+                <button type="button" onClick={handleResend} disabled={resendLoading}
+                  className="w-full py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-60 transition-colors">
+                  {resendLoading ? "Sending…" : "Resend verification email"}
+                </button>
+                {resendMsg && (
+                  <p className={`text-xs text-center ${resendMsg.startsWith("Failed") ? "text-red-500" : "text-emerald-600"}`}>
+                    {resendMsg}
+                  </p>
+                )}
+                <p className="text-xs text-gray-400">Didn&apos;t receive it? Also check your spam folder.</p>
+              </div>
             </div>
           )}
 
@@ -521,9 +559,13 @@ export default function OnboardingPage() {
                 <button
                   type="button"
                   onClick={handleFinish}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold rounded-xl hover:opacity-90 transition-opacity shadow-sm"
+                  disabled={finishing}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-70 transition-opacity shadow-sm"
                 >
-                  <Zap size={16} /> Get Started
+                  {finishing
+                    ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Setting up…</>
+                    : <><Zap size={16} /> Get Started</>
+                  }
                 </button>
               </div>
 

@@ -47,6 +47,8 @@ interface AuthContextType {
   changePassword: (oldPass: string, newPass: string) => Promise<boolean>;
   /** Send a password-reset email (Supabase only) */
   resetPassword: (email: string) => Promise<{ error: string | null }>;
+  /** Resend the signup confirmation email */
+  resendConfirmation: (email: string) => Promise<{ error: string | null }>;
   exitDemo: () => void;
 }
 
@@ -122,13 +124,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback(async (email: string, password: string): Promise<{ error: string | null; needsEmailConfirmation?: boolean }> => {
     if (supabase) {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin;
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          // After email confirmation, Supabase redirects here → AppShell detects
+          // isAuthenticated=true, isOnboarded=false → sends to /onboarding Step 1
+          emailRedirectTo: `${appUrl}/onboarding`,
+        },
+      });
       if (error) return { error: error.message };
-      // When email confirmations are ON, Supabase returns user but no session.
       const needsEmailConfirmation = !data.session && !!data.user;
       return { error: null, needsEmailConfirmation };
     }
-    // LocalStorage fallback: just hash the password
     await setPasswordLocal(password);
     return { error: null };
   }, []);
@@ -174,6 +183,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Exit demo ─────────────────────────────────────────────────────────────
 
+  const resendConfirmation = useCallback(async (email: string): Promise<{ error: string | null }> => {
+    if (!supabase) return { error: "Supabase not configured" };
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin;
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: `${appUrl}/onboarding` },
+    });
+    return { error: error?.message ?? null };
+  }, []);
+
   const resetPassword = useCallback(async (email: string): Promise<{ error: string | null }> => {
     if (!supabase) return { error: "Password reset via email requires Supabase to be configured." };
     // Use NEXT_PUBLIC_APP_URL so the link always points to production even when
@@ -197,7 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, isAuthenticated, hasPassword, hydrated, demoMode,
       isSupabase: isSupabaseEnabled,
-      login, logout, signUp, setPassword, changePassword, resetPassword, exitDemo,
+      login, logout, signUp, setPassword, changePassword, resetPassword, resendConfirmation, exitDemo,
     }}>
       {children}
     </AuthContext.Provider>
