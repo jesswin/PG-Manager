@@ -33,12 +33,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!bothHydrated) return;
     if (isFullscreen) return;
-    // All unauthenticated visitors — new or returning — land on the demo/landing page.
-    // From there they choose "Get Started" (onboarding) or "Sign In" (login).
     if (!isAuthenticated && !demoMode) {
+      // Not logged in → landing page
       router.push("/demo");
+    } else if (isAuthenticated && !isOnboarded && !demoMode) {
+      // Logged in (e.g. just confirmed email) but hasn't set up their PG yet
+      router.push("/onboarding");
     }
-  }, [bothHydrated, isAuthenticated, demoMode, isFullscreen, router]);
+  }, [bothHydrated, isAuthenticated, isOnboarded, demoMode, isFullscreen, router]);
 
   const { notifPrefs } = useSettings();
   // Trigger auto-notify whenever the app is open and prefs say so.
@@ -76,8 +78,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return <main className="h-full overflow-y-auto">{children}</main>;
   }
 
-  // Don't render the dashboard while redirecting to /demo
+  // Block render while waiting for redirect
   if (!isAuthenticated && !demoMode) return null;
+  if (isAuthenticated && !isOnboarded && !demoMode) return null;
 
   return (
     <div className="flex flex-col h-full">

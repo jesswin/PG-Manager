@@ -8,7 +8,7 @@ import { useAuth } from "@/store/AuthContext";
 import {
   Building2, User, ChevronRight, ChevronLeft, Plus, Trash2,
   CheckCircle2, Zap, Users, DoorOpen, MessageCircle, Download,
-  Check, Star, Eye, EyeOff, Lock,
+  Check, Star, Eye, EyeOff, Lock, Mail,
 } from "lucide-react";
 
 const inp = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white text-gray-800 placeholder:text-gray-400";
@@ -76,6 +76,7 @@ export default function OnboardingPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [pwdError, setPwdError] = useState("");
+  const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
 
   // Step 2 — PG list
   const [pgDrafts, setPgDrafts] = useState<PgDraft[]>([
@@ -104,9 +105,14 @@ export default function OnboardingPage() {
     if (password.length < 6) { setPwdError("Password must be at least 6 characters."); return; }
     if (password !== confirmPassword) { setPwdError("Passwords do not match."); return; }
     setPwdError("");
-    // signUp works for both Supabase (email+password) and localStorage (password only)
-    const { error } = await signUp(ownerForm.email, password);
+    const { error, needsEmailConfirmation } = await signUp(ownerForm.email, password);
     if (error) { setPwdError(error); return; }
+    if (needsEmailConfirmation) {
+      // Supabase email confirmations are ON — show "check your inbox" screen.
+      // After confirming, the user will be auto-redirected to /onboarding to continue.
+      setNeedsEmailConfirm(true);
+      return;
+    }
     goNext();
   }
 
@@ -207,7 +213,29 @@ export default function OnboardingPage() {
       <div className="flex-1 flex items-start justify-center px-4 pb-10">
         <div className="w-full max-w-xl">
           {/* ── Step 0: Owner Profile ──────────────────────────── */}
-          {step === 0 && (
+          {step === 0 && needsEmailConfirm && (
+            <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-8 text-center">
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                <Mail size={30} className="text-emerald-600" />
+              </div>
+              <h1 className="text-xl font-bold text-gray-900 mb-2">Check your inbox!</h1>
+              <p className="text-sm text-gray-500 mb-4 leading-relaxed">
+                We sent a confirmation link to <strong>{ownerForm.email}</strong>.
+                <br />Click the link in the email to verify your account.
+              </p>
+              <div className="bg-indigo-50 rounded-xl p-4 text-xs text-indigo-700 text-left">
+                <p className="font-semibold mb-1">After confirming your email:</p>
+                <ol className="list-decimal list-inside space-y-1 text-indigo-600">
+                  <li>Click the confirmation link in the email</li>
+                  <li>You'll be signed in automatically</li>
+                  <li>You'll be brought back here to finish setting up your PG</li>
+                </ol>
+              </div>
+              <p className="text-xs text-gray-400 mt-4">Didn&apos;t receive it? Check your spam folder.</p>
+            </div>
+          )}
+
+          {step === 0 && !needsEmailConfirm && (
             <form onSubmit={handleProfileSubmit} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center">

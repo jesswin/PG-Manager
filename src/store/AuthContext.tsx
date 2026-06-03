@@ -41,7 +41,7 @@ interface AuthContextType {
   login: (email: string, password: string, remember?: boolean) => Promise<boolean>;
   logout: () => void;
   /** Register — creates Supabase user OR stores local SHA-256 hash */
-  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: string | null; needsEmailConfirmation?: boolean }>;
   /** Legacy helper (still used by onboarding in local mode) */
   setPassword: (password: string) => Promise<void>;
   changePassword: (oldPass: string, newPass: string) => Promise<boolean>;
@@ -120,10 +120,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Sign up (Supabase) / set password (localStorage) ─────────────────────
 
-  const signUp = useCallback(async (email: string, password: string): Promise<{ error: string | null }> => {
+  const signUp = useCallback(async (email: string, password: string): Promise<{ error: string | null; needsEmailConfirmation?: boolean }> => {
     if (supabase) {
-      const { error } = await supabase.auth.signUp({ email, password });
-      return { error: error?.message ?? null };
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) return { error: error.message };
+      // When email confirmations are ON, Supabase returns user but no session.
+      const needsEmailConfirmation = !data.session && !!data.user;
+      return { error: null, needsEmailConfirmation };
     }
     // LocalStorage fallback: just hash the password
     await setPasswordLocal(password);
