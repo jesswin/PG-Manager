@@ -1,24 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Generic HTTP webhook proxy — works with Twilio, MSG91, WATI, or any custom endpoint.
-// The client sends the full payload; this route forwards it to the configured webhook URL.
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { webhookUrl, apiKey, payload } = body as {
-    webhookUrl: string;
-    apiKey?: string;
-    payload: Record<string, unknown>;
-  };
+// SMS/WhatsApp webhook is configured by the platform admin — not by individual PG owners.
+// Set these in Vercel environment variables.
+const SMS_WEBHOOK_URL = process.env.SMS_WEBHOOK_URL;
+const SMS_API_KEY     = process.env.SMS_API_KEY;
 
-  if (!webhookUrl) {
-    return NextResponse.json({ error: "No webhook URL configured" }, { status: 400 });
+export async function POST(req: NextRequest) {
+  if (!SMS_WEBHOOK_URL) {
+    // Not configured — silently skip
+    return NextResponse.json({ success: false, reason: "sms_not_configured" });
   }
 
-  const res = await fetch(webhookUrl, {
+  const { payload } = await req.json() as { payload: Record<string, unknown> };
+
+  if (!payload) {
+    return NextResponse.json({ error: "Missing payload" }, { status: 400 });
+  }
+
+  const res = await fetch(SMS_WEBHOOK_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      ...(SMS_API_KEY ? { Authorization: `Bearer ${SMS_API_KEY}` } : {}),
     },
     body: JSON.stringify(payload),
   });

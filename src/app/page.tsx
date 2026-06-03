@@ -14,6 +14,7 @@ import {
   CreditCard, Bell, UserPlus, CheckCircle2, Send, MessageCircle, Clock, Lock, Link2, Zap,
 } from "lucide-react";
 import { whatsappUrl, rentReminderWithLink, rentReminderMessage } from "@/lib/whatsapp";
+import { buildUpiPayPageUrl } from "@/lib/upi";
 import { usePlan } from "@/store/PlanContext";
 import UpgradeModal from "@/components/UpgradeModal";
 import { useSettings } from "@/store/SettingsContext";
@@ -31,7 +32,7 @@ export default function DashboardPage() {
   const { toasts, addToast, dismiss } = useToast();
 
   const { can } = usePlan();
-  const { razorpay, isRazorpayConfigured } = useSettings();
+  const { upi, isUpiConfigured } = useSettings();
   const { owner, activePg } = useOnboarding();
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string; plan: "monthly" | "quarterly" }>({ open: false, feature: "", plan: "monthly" });
   const [autoSendDismissed, setAutoSendDismissed] = useState(false);
@@ -97,23 +98,17 @@ export default function DashboardPage() {
       .sort((a, b) => a.diffDays - b.diffDays);
   })();
 
-  function buildPayLink(p: { tenantId: string; tenantName: string; roomNumber: string; amount: number; month: string }, t: { phone: string }): string {
-    if (!isRazorpayConfigured) return "";
-    const base = typeof window !== "undefined" ? window.location.origin : "";
-    const params = new URLSearchParams({
-      name: p.tenantName,
-      room: p.roomNumber,
-      amount: String(p.amount),
-      month: p.month,
-      phone: t.phone,
-      key: razorpay.keyId,
-      pg: razorpay.pgName || "PG Manager",
-      currency: razorpay.currency || "INR",
+  function buildPayLink(p: { tenantName: string; roomNumber: string; amount: number; month: string }, t: { phone: string }): string {
+    if (!isUpiConfigured) return "";
+    return buildUpiPayPageUrl({
+      tenantName: p.tenantName, roomNumber: p.roomNumber,
+      amount: p.amount, month: p.month, phone: t.phone,
+      upiId: upi.upiId, upiName: upi.upiName || activePg?.name || "PG Manager",
+      pgName: activePg?.name || "PG Manager",
     });
-    return `${base}/pay?${params.toString()}`;
   }
 
-  function getReminderMsg(p: { tenantId: string; tenantName: string; roomNumber: string; amount: number; month: string; dueDate: string }, t: { phone: string }) {
+  function getReminderMsg(p: { tenantName: string; roomNumber: string; amount: number; month: string; dueDate: string }, t: { phone: string }) {
     const link = buildPayLink(p, t);
     return link
       ? rentReminderWithLink(p.tenantName, p.roomNumber, p.amount, p.month, link, p.dueDate)
@@ -268,11 +263,11 @@ export default function DashboardPage() {
               {dueReminders.filter((r) => r.diffDays <= 3 && r.diffDays >= -1).length} tenant{dueReminders.filter((r) => r.diffDays <= 3 && r.diffDays >= -1).length > 1 ? "s have" : " has"} rent due within 3 days
             </p>
             <p className="text-xs text-amber-600 mt-0.5">
-              {isRazorpayConfigured ? "Payment links will be included in the WhatsApp message." : "Configure Razorpay in Settings to include payment links."}
+              {isUpiConfigured ? "UPI payment links will be included in the WhatsApp message." : "Add your UPI ID in Settings to include payment links."}
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {!isRazorpayConfigured && (
+            {!isUpiConfigured && (
               <Link href="/settings" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-amber-200 text-amber-700 text-xs font-semibold rounded-lg hover:bg-amber-50 transition-colors">
                 <Link2 size={12} /> Add Key
               </Link>
@@ -304,7 +299,7 @@ export default function DashboardPage() {
             </div>
             {can("whatsappBulk") ? (
               <button onClick={sendAllReminders} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-xs font-semibold rounded-lg hover:bg-emerald-600 transition-colors shadow-sm">
-                <MessageCircle size={14} /> {isRazorpayConfigured ? "Send All + Payment Links" : "Send All via WhatsApp"}
+                <MessageCircle size={14} /> {isUpiConfigured ? "Send All + Payment Links" : "Send All via WhatsApp"}
               </button>
             ) : (
               <button onClick={() => setUpgradeModal({ open: true, feature: "Bulk WhatsApp — Send All Reminders", plan: "quarterly" })}
@@ -340,7 +335,7 @@ export default function DashboardPage() {
                     <a href={msgUrl} target="_blank" rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 text-xs font-medium rounded-lg transition-colors shrink-0">
                       <MessageCircle size={13} />
-                      {isRazorpayConfigured ? "Send Link" : "WhatsApp"}
+                      {isUpiConfigured ? "Send Link" : "WhatsApp"}
                     </a>
                   ) : (
                     <button onClick={() => setUpgradeModal({ open: true, feature: "WhatsApp Reminders", plan: "monthly" })}
@@ -352,7 +347,7 @@ export default function DashboardPage() {
               );
             })}
           </div>
-          {isRazorpayConfigured && (
+          {isUpiConfigured && (
             <div className="px-6 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center gap-2">
               <Link2 size={11} className="text-indigo-400" />
               <p className="text-xs text-gray-500">Payment links included in all messages — tenant can pay directly from WhatsApp.</p>

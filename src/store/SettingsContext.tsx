@@ -2,69 +2,49 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-// ── Razorpay ────────────────────────────────────────────────────────────────
+// ── UPI Configuration ─────────────────────────────────────────────────────────
+// Simple: owner just provides their UPI ID — no account/API setup needed.
 
-interface RazorpayConfig {
-  keyId: string;
-  keySecret: string;
-  businessName: string;
-  businessEmail: string;
-  businessPhone: string;
-  pgName: string;
-  currency: string;
+export interface UpiConfig {
+  upiId: string;    // e.g. "9876543210@paytm" or "business@icici"
+  upiName: string;  // display name tenants see when paying, e.g. "Sunshine PG"
+  enabled: boolean;
 }
 
-const DEFAULT_RAZORPAY: RazorpayConfig = {
-  keyId: "",
-  keySecret: "",
-  businessName: "",
-  businessEmail: "",
-  businessPhone: "",
-  pgName: "PG Manager",
-  currency: "INR",
+const DEFAULT_UPI: UpiConfig = {
+  upiId: "",
+  upiName: "",
+  enabled: false,
 };
 
-// ── Notifications ────────────────────────────────────────────────────────────
+// ── Notification Preferences ──────────────────────────────────────────────────
+// Emails and SMS are sent from the platform admin's account (env vars on server).
+// Owners only control WHEN reminders go out — not HOW they're sent.
 
-export interface NotificationConfig {
-  emailEnabled: boolean;
-  resendApiKey: string;       // resend.com API key
-  fromName: string;           // e.g. "Sunshine PG"
-  smsEnabled: boolean;
-  smsWebhookUrl: string;      // POST endpoint (Twilio, MSG91, WATI, custom…)
-  smsApiKey: string;          // Bearer token for the webhook
-  daysBeforeDue: number;      // how many days ahead to send reminder (default 3)
-  autoSendEnabled: boolean;   // auto-send on app load when due date is near
+export interface NotificationPrefs {
+  autoSendEnabled: boolean;  // auto-send reminders on app open
+  daysBeforeDue: number;     // days before due date to send reminder
 }
 
-export const DEFAULT_NOTIFICATIONS: NotificationConfig = {
-  emailEnabled: false,
-  resendApiKey: "",
-  fromName: "",
-  smsEnabled: false,
-  smsWebhookUrl: "",
-  smsApiKey: "",
-  daysBeforeDue: 3,
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   autoSendEnabled: true,
+  daysBeforeDue: 3,
 };
 
-// ── Room Configuration ───────────────────────────────────────────────────────
+// ── Room Configuration ────────────────────────────────────────────────────────
 
-export const DEFAULT_FLOORS = ["Ground Floor", "Floor 1", "Floor 2", "Floor 3"];
+export const DEFAULT_FLOORS    = ["Ground Floor", "Floor 1", "Floor 2", "Floor 3"];
 export const DEFAULT_ROOM_TYPES = ["Single", "Double", "Triple"];
 const ROOM_CONFIG_KEY = "pgm_room_config";
 
-// ── Context ──────────────────────────────────────────────────────────────────
+// ── Context type ──────────────────────────────────────────────────────────────
 
 interface SettingsContextType {
-  razorpay: RazorpayConfig;
-  updateRazorpay: (cfg: Partial<RazorpayConfig>) => void;
-  isRazorpayConfigured: boolean;
-  notifications: NotificationConfig;
-  updateNotifications: (cfg: Partial<NotificationConfig>) => void;
-  isEmailConfigured: boolean;
-  isSmsConfigured: boolean;
-  // Room config
+  upi: UpiConfig;
+  updateUpi: (cfg: Partial<UpiConfig>) => void;
+  isUpiConfigured: boolean;
+  notifPrefs: NotificationPrefs;
+  updateNotifPrefs: (prefs: Partial<NotificationPrefs>) => void;
   floors: string[];
   roomTypes: string[];
   addFloor: (floor: string) => void;
@@ -74,13 +54,11 @@ interface SettingsContextType {
 }
 
 const SettingsContext = createContext<SettingsContextType>({
-  razorpay: DEFAULT_RAZORPAY,
-  updateRazorpay: () => {},
-  isRazorpayConfigured: false,
-  notifications: DEFAULT_NOTIFICATIONS,
-  updateNotifications: () => {},
-  isEmailConfigured: false,
-  isSmsConfigured: false,
+  upi: DEFAULT_UPI,
+  updateUpi: () => {},
+  isUpiConfigured: false,
+  notifPrefs: DEFAULT_NOTIFICATION_PREFS,
+  updateNotifPrefs: () => {},
   floors: DEFAULT_FLOORS,
   roomTypes: DEFAULT_ROOM_TYPES,
   addFloor: () => {},
@@ -89,85 +67,78 @@ const SettingsContext = createContext<SettingsContextType>({
   removeRoomType: () => {},
 });
 
+// ── Provider ──────────────────────────────────────────────────────────────────
+
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [razorpay, setRazorpay] = useState<RazorpayConfig>(DEFAULT_RAZORPAY);
-  const [notifications, setNotifications] = useState<NotificationConfig>(DEFAULT_NOTIFICATIONS);
-  const [floors, setFloors] = useState<string[]>(DEFAULT_FLOORS);
+  const [upi, setUpi]             = useState<UpiConfig>(DEFAULT_UPI);
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
+  const [floors, setFloors]       = useState<string[]>(DEFAULT_FLOORS);
   const [roomTypes, setRoomTypes] = useState<string[]>(DEFAULT_ROOM_TYPES);
 
   useEffect(() => {
     try {
-      const savedRazorpay = localStorage.getItem("pgm_razorpay_config");
-      if (savedRazorpay) setRazorpay({ ...DEFAULT_RAZORPAY, ...JSON.parse(savedRazorpay) });
+      const savedUpi = localStorage.getItem("pgm_upi_config");
+      if (savedUpi) setUpi({ ...DEFAULT_UPI, ...JSON.parse(savedUpi) });
 
-      const savedNotif = localStorage.getItem("pgm_notification_config");
-      if (savedNotif) setNotifications({ ...DEFAULT_NOTIFICATIONS, ...JSON.parse(savedNotif) });
+      const savedNotif = localStorage.getItem("pgm_notif_prefs");
+      if (savedNotif) setNotifPrefs({ ...DEFAULT_NOTIFICATION_PREFS, ...JSON.parse(savedNotif) });
 
-      const savedRoomConfig = localStorage.getItem(ROOM_CONFIG_KEY);
-      if (savedRoomConfig) {
-        const rc = JSON.parse(savedRoomConfig);
-        if (Array.isArray(rc.floors) && rc.floors.length) setFloors(rc.floors);
+      const savedRoom = localStorage.getItem(ROOM_CONFIG_KEY);
+      if (savedRoom) {
+        const rc = JSON.parse(savedRoom);
+        if (Array.isArray(rc.floors) && rc.floors.length)    setFloors(rc.floors);
         if (Array.isArray(rc.roomTypes) && rc.roomTypes.length) setRoomTypes(rc.roomTypes);
       }
-    } catch {}
+    } catch { /* ignore */ }
   }, []);
 
+  function updateUpi(cfg: Partial<UpiConfig>) {
+    setUpi((prev) => {
+      const next = { ...prev, ...cfg };
+      localStorage.setItem("pgm_upi_config", JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function updateNotifPrefs(prefs: Partial<NotificationPrefs>) {
+    setNotifPrefs((prev) => {
+      const next = { ...prev, ...prefs };
+      localStorage.setItem("pgm_notif_prefs", JSON.stringify(next));
+      return next;
+    });
+  }
+
   function saveRoomConfig(f: string[], t: string[]) {
-    try { localStorage.setItem(ROOM_CONFIG_KEY, JSON.stringify({ floors: f, roomTypes: t })); } catch {}
+    try { localStorage.setItem(ROOM_CONFIG_KEY, JSON.stringify({ floors: f, roomTypes: t })); } catch { /* ignore */ }
   }
 
   function addFloor(floor: string) {
-    const trimmed = floor.trim();
-    if (!trimmed || floors.includes(trimmed)) return;
-    const next = [...floors, trimmed];
-    setFloors(next);
-    saveRoomConfig(next, roomTypes);
+    const v = floor.trim();
+    if (!v || floors.includes(v)) return;
+    const next = [...floors, v];
+    setFloors(next); saveRoomConfig(next, roomTypes);
   }
-
   function removeFloor(floor: string) {
     const next = floors.filter((f) => f !== floor);
-    setFloors(next);
-    saveRoomConfig(next, roomTypes);
+    setFloors(next); saveRoomConfig(next, roomTypes);
   }
-
   function addRoomType(type: string) {
-    const trimmed = type.trim();
-    if (!trimmed || roomTypes.includes(trimmed)) return;
-    const next = [...roomTypes, trimmed];
-    setRoomTypes(next);
-    saveRoomConfig(floors, next);
+    const v = type.trim();
+    if (!v || roomTypes.includes(v)) return;
+    const next = [...roomTypes, v];
+    setRoomTypes(next); saveRoomConfig(floors, next);
   }
-
   function removeRoomType(type: string) {
     const next = roomTypes.filter((t) => t !== type);
-    setRoomTypes(next);
-    saveRoomConfig(floors, next);
+    setRoomTypes(next); saveRoomConfig(floors, next);
   }
 
-  function updateRazorpay(cfg: Partial<RazorpayConfig>) {
-    setRazorpay((prev) => {
-      const next = { ...prev, ...cfg };
-      localStorage.setItem("pgm_razorpay_config", JSON.stringify(next));
-      return next;
-    });
-  }
-
-  function updateNotifications(cfg: Partial<NotificationConfig>) {
-    setNotifications((prev) => {
-      const next = { ...prev, ...cfg };
-      localStorage.setItem("pgm_notification_config", JSON.stringify(next));
-      return next;
-    });
-  }
-
-  const isRazorpayConfigured = razorpay.keyId.trim().startsWith("rzp_");
-  const isEmailConfigured = notifications.emailEnabled && notifications.resendApiKey.trim().length > 10;
-  const isSmsConfigured = notifications.smsEnabled && notifications.smsWebhookUrl.trim().startsWith("http");
+  const isUpiConfigured = upi.enabled && upi.upiId.trim().length > 3 && upi.upiId.includes("@");
 
   return (
     <SettingsContext.Provider value={{
-      razorpay, updateRazorpay, isRazorpayConfigured,
-      notifications, updateNotifications, isEmailConfigured, isSmsConfigured,
+      upi, updateUpi, isUpiConfigured,
+      notifPrefs, updateNotifPrefs,
       floors, roomTypes, addFloor, removeFloor, addRoomType, removeRoomType,
     }}>
       {children}

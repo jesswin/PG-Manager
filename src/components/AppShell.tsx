@@ -39,20 +39,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [bothHydrated, isAuthenticated, demoMode, isFullscreen, router]);
 
-  const { isEmailConfigured, isSmsConfigured } = useSettings();
+  const { notifPrefs } = useSettings();
+  // Trigger auto-notify whenever the app is open and prefs say so.
+  // The API routes check server-side env vars to decide whether to actually send.
   const notifyResult = useAutoNotify(
-    isAuthenticated && isOnboarded && !isFullscreen && (isEmailConfigured || isSmsConfigured)
+    isAuthenticated && isOnboarded && !isFullscreen && notifPrefs.autoSendEnabled
   );
 
   useEffect(() => {
     if (notifyResult.ran && notifyResult.sent > 0) {
-      const channels = [isEmailConfigured && "email", isSmsConfigured && "SMS"].filter(Boolean).join(" & ");
-      setToastMsg(`Auto-sent ${notifyResult.sent} rent reminder${notifyResult.sent > 1 ? "s" : ""} via ${channels}.`);
+      setToastMsg(`Auto-sent ${notifyResult.sent} rent reminder${notifyResult.sent > 1 ? "s" : ""}.`);
       setToastVisible(true);
       const t = setTimeout(() => setToastVisible(false), 6000);
       return () => clearTimeout(t);
     }
-  }, [notifyResult.ran, notifyResult.sent, isEmailConfigured, isSmsConfigured]);
+  }, [notifyResult.ran, notifyResult.sent]);
 
   function handleSearchSubmit(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== "Enter") return;

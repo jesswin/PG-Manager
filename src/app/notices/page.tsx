@@ -11,7 +11,6 @@ import { Send, Bell, ChevronDown, Users, Trash2, Eye, Lock, Zap } from "lucide-r
 import { usePlan } from "@/store/PlanContext";
 import UpgradeModal from "@/components/UpgradeModal";
 import Link from "next/link";
-import { useSettings } from "@/store/SettingsContext";
 import { useOnboarding } from "@/store/OnboardingContext";
 import { sendNoticeEmail, sendNoticeSms } from "@/hooks/useAutoNotify";
 
@@ -22,7 +21,6 @@ export default function NoticesPage() {
   const { tenants, notices, addNotice, sendDraft, deleteNotice } = useApp();
   const { toasts, addToast, dismiss } = useToast();
   const { can } = usePlan();
-  const { notifications, isEmailConfigured, isSmsConfigured } = useSettings();
   const { activePg } = useOnboarding();
 
   const [form, setForm] = useState({ ...EMPTY_FORM });
@@ -42,33 +40,11 @@ export default function NoticesPage() {
 
   async function dispatchNotifications(title: string, message: string, recipientId: string) {
     const pgName = activePg?.name || "PG Manager";
-    const targets = recipientId === "all"
-      ? tenants
-      : tenants.filter((t) => t.id === recipientId);
-
+    const targets = recipientId === "all" ? tenants : tenants.filter((t) => t.id === recipientId);
     for (const t of targets) {
-      if (isEmailConfigured && t.email) {
-        sendNoticeEmail({
-          apiKey: notifications.resendApiKey,
-          fromName: notifications.fromName || pgName,
-          to: t.email,
-          tenantName: t.name,
-          title,
-          message,
-          pgName,
-        }).catch(() => {});
-      }
-      if (isSmsConfigured) {
-        sendNoticeSms({
-          webhookUrl: notifications.smsWebhookUrl,
-          apiKey: notifications.smsApiKey || undefined,
-          tenantPhone: t.phone,
-          tenantName: t.name,
-          title,
-          message,
-          pgName,
-        }).catch(() => {});
-      }
+      // Emails and SMS use server-side API keys — no credentials needed here
+      if (t.email) sendNoticeEmail({ to: t.email, tenantName: t.name, title, message, pgName }).catch(() => {});
+      sendNoticeSms({ tenantPhone: t.phone, tenantName: t.name, title, message, pgName }).catch(() => {});
     }
   }
 

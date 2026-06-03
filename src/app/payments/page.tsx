@@ -12,7 +12,7 @@ import { whatsappUrl, rentReminderMessage } from "@/lib/whatsapp";
 import { usePlan } from "@/store/PlanContext";
 import UpgradeModal from "@/components/UpgradeModal";
 import { useSettings } from "@/store/SettingsContext";
-import { openRazorpayCheckout } from "@/lib/razorpay";
+import { buildUpiPayPageUrl } from "@/lib/upi";
 import Link from "next/link";
 import { getRecentMonths, getCurrentMonthLabel, getPreviousMonthLabel, monthLabelToDueDate } from "@/lib/months";
 
@@ -25,9 +25,8 @@ export default function PaymentsPage() {
   const { tenants, payments, addPayment, markPaymentPaid } = useApp();
   const { toasts, addToast, dismiss } = useToast();
   const { can } = usePlan();
-  const { razorpay, isRazorpayConfigured } = useSettings();
+  const { upi, isUpiConfigured } = useSettings();
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string; plan: "monthly" | "quarterly" }>({ open: false, feature: "", plan: "monthly" });
-  const [collectingId, setCollectingId] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [monthFilter, setMonthFilter] = useState(getPreviousMonthLabel);
@@ -85,62 +84,18 @@ export default function PaymentsPage() {
     addToast("Payments exported as CSV.", "info");
   }
 
-  function getPaymentLink(paymentId: string): string {
+  function handleSendUpiLink(paymentId: string) {
     const p = payments.find((x) => x.id === paymentId);
-    if (!p) return "";
+    if (!p || !isUpiConfigured) return;
     const t = tenants.find((x) => x.id === p.tenantId);
-    const base = typeof window !== "undefined" ? window.location.origin : "";
-    const params = new URLSearchParams({
-      name: p.tenantName,
-      room: p.roomNumber,
-      amount: String(p.amount),
-      month: p.month,
-      phone: t?.phone || "",
-      key: razorpay.keyId,
-      pg: razorpay.pgName || "PG Manager",
-      currency: razorpay.currency || "INR",
+    const link = buildUpiPayPageUrl({
+      tenantName: p.tenantName, roomNumber: p.roomNumber,
+      amount: p.amount, month: p.month, phone: t?.phone || "",
+      upiId: upi.upiId, upiName: upi.upiName || "PG Manager",
+      pgName: upi.upiName || "PG Manager",
     });
-    return `${base}/pay?${params.toString()}`;
-  }
-
-  function handleSendPaymentLink(paymentId: string) {
-    const p = payments.find((x) => x.id === paymentId);
-    if (!p) return;
-    const link = getPaymentLink(paymentId);
-    const msg = `Hi ${p.tenantName.split(" ")[0]}, your rent for *${p.month}* (Room ${p.roomNumber}) of *₹${p.amount.toLocaleString("en-IN")}* is due.\n\nPay securely here: ${link}`;
+    const msg = `Hi ${p.tenantName.split(" ")[0]}, your rent for *${p.month}* (Room ${p.roomNumber}) of *₹${p.amount.toLocaleString("en-IN")}* is due.\n\nPay via UPI: ${link}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
-  }
-
-  async function handleRazorpayCollect(paymentId: string) {
-    const p = payments.find((x) => x.id === paymentId);
-    if (!p) return;
-    const t = tenants.find((x) => x.id === p.tenantId);
-    if (!t) return;
-
-    setCollectingId(paymentId);
-    try {
-      await openRazorpayCheckout({
-        key: razorpay.keyId,
-        amount: p.amount * 100, // paise
-        currency: razorpay.currency || "INR",
-        name: razorpay.pgName || "PG Manager",
-        description: `Rent for ${p.month} – Room ${p.roomNumber}`,
-        prefill: { name: t.name, contact: t.phone, email: t.email || "" },
-        notes: { tenant_id: t.id, room: t.roomNumber, month: p.month },
-        theme: { color: "#4f46e5" },
-        handler: (response) => {
-          markPaymentPaid(paymentId);
-          addToast(`Payment collected! ID: ${response.razorpay_payment_id}`);
-          setCollectingId(null);
-        },
-        modal: {
-          ondismiss: () => setCollectingId(null),
-        },
-      });
-    } catch {
-      addToast("Failed to open Razorpay checkout. Check your Key ID in Settings.", "error");
-      setCollectingId(null);
-    }
   }
 
   return (
@@ -182,15 +137,15 @@ export default function PaymentsPage() {
         ))}
       </div>
 
-      {/* Razorpay banner */}
-      {!isRazorpayConfigured && (
+      {/* UPI setup banner */}
+      {!isUpiConfigured && (
         <div className="mb-5 flex items-center gap-3 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl">
           <CreditCard size={16} className="text-indigo-500 shrink-0" />
           <p className="text-sm text-indigo-700 flex-1">
-            <span className="font-semibold">Collect payments online via Razorpay.</span> Configure your API keys to enable the Collect button.
+            <span className="font-semibold">Send UPI payment links via WhatsApp.</span> Add your UPI ID in Settings to enable one-tap rent collection.
           </p>
           <Link href="/settings" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors">
-            <Settings size={12} /> Configure
+            <Settings size={12} /> Set UPI ID
           </Link>
         </div>
       )}
@@ -266,23 +221,14 @@ export default function PaymentsPage() {
                           </button>
                         );
                       })()}
-                      {p.status !== "Paid" && isRazorpayConfigured && (
-                        <>
-                          <button
-                            onClick={() => handleSendPaymentLink(p.id)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-md transition-colors"
-                            title="Send payment link via WhatsApp"
-                          >
-                            <Link2 size={13} /> Send Link
-                          </button>
-                          <button
-                            onClick={() => handleRazorpayCollect(p.id)}
-                            disabled={collectingId === p.id}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors disabled:opacity-50 disabled:cursor-wait"
-                          >
-                            <CreditCard size={13} /> {collectingId === p.id ? "Opening…" : "Collect"}
-                          </button>
-                        </>
+                      {p.status !== "Paid" && isUpiConfigured && (
+                        <button
+                          onClick={() => handleSendUpiLink(p.id)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-md transition-colors"
+                          title="Send UPI payment link via WhatsApp"
+                        >
+                          <Link2 size={13} /> UPI Link
+                        </button>
                       )}
                       {p.status !== "Paid" ? (
                         <button onClick={() => handleMarkPaid(p.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors">
