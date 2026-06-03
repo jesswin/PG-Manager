@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { enterDemoMode } from "@/lib/demo";
 import {
   Building2, Users, DoorOpen, MessageCircle, CreditCard,
@@ -160,11 +159,16 @@ const FAQS = [
 
 export default function DemoPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const router = useRouter();
 
   function handleTryDemo() {
-    enterDemoMode();
-    router.push("/");
+    try { enterDemoMode(); } catch { /* localStorage blocked */ }
+    // Hard navigation ensures all auth/onboarding contexts reinitialize
+    // with the new demo-mode localStorage value.
+    window.location.href = "/";
+  }
+
+  function handleStartFree() {
+    window.location.href = "/onboarding";
   }
 
   return (
@@ -187,7 +191,7 @@ export default function DemoPage() {
             <Link href="/login" className="hidden sm:block px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors">
               Sign In
             </Link>
-            <Link href="/onboarding"
+            <Link onClick={() => window.location.href="/onboarding"} href="/onboarding"
               className="px-4 py-1.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition-colors">
               Get Started Free
             </Link>
@@ -219,10 +223,11 @@ export default function DemoPage() {
               >
                 <Play size={15} fill="currentColor" /> Try Live Demo
               </button>
-              <Link href="/onboarding"
+              <button
+                onClick={handleStartFree}
                 className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-xl hover:bg-gray-50 transition-colors shadow-sm">
                 Start for Free <ArrowRight size={16} />
-              </Link>
+              </button>
             </div>
             <p className="text-xs text-gray-400 mt-4">
               Demo uses sample data · No sign-up needed · Or start free with your own data
@@ -465,7 +470,7 @@ export default function DemoPage() {
             })}
           </div>
           <div className="text-center mt-10">
-            <Link href="/onboarding"
+            <Link onClick={() => window.location.href="/onboarding"} href="/onboarding"
               className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">
               Start Your Setup Now <ArrowRight size={16} />
             </Link>
@@ -519,7 +524,7 @@ export default function DemoPage() {
                     </li>
                   ))}
                 </ul>
-                <Link href="/onboarding"
+                <Link onClick={() => window.location.href="/onboarding"} href="/onboarding"
                   className={`block text-center py-2.5 rounded-xl text-sm font-semibold transition-colors ${plan.highlight
                     ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:opacity-90"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>
@@ -642,7 +647,7 @@ export default function DemoPage() {
             Start free — no credit card, no commitment.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link href="/onboarding"
+            <Link onClick={() => window.location.href="/onboarding"} href="/onboarding"
               className="inline-flex items-center gap-2 px-8 py-3.5 bg-white text-indigo-700 text-sm font-bold rounded-xl hover:bg-indigo-50 transition-colors shadow-lg">
               Get Started Free <ArrowRight size={16} />
             </Link>
@@ -670,7 +675,7 @@ export default function DemoPage() {
             Built for PG owners across India. All data stored locally on your device.
           </p>
           <div className="flex items-center gap-4 text-xs">
-            <Link href="/onboarding" className="hover:text-white transition-colors">Get Started</Link>
+            <Link onClick={() => window.location.href="/onboarding"} href="/onboarding" className="hover:text-white transition-colors">Get Started</Link>
             <Link href="/login" className="hover:text-white transition-colors">Sign In</Link>
           </div>
         </div>

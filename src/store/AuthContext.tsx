@@ -173,8 +173,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = useCallback(async (email: string): Promise<{ error: string | null }> => {
     if (!supabase) return { error: "Password reset via email requires Supabase to be configured." };
+    // Use NEXT_PUBLIC_APP_URL so the link always points to production even when
+    // the reset is triggered from a local dev machine.
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin;
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${appUrl}/reset-password`,
     });
     return { error: error?.message ?? null };
   }, []);
