@@ -53,19 +53,22 @@ const PLAN_HIGHLIGHTS: Record<PlanId, { label: string; included: boolean }[]> = 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
-  const { completeOnboarding, addPg, isOnboarded } = useOnboarding();
+  const { completeOnboarding, addPg, isOnboarded, hydrated: onboardingHydrated } = useOnboarding();
   const { plan, setPlan } = usePlan();
-  const { signUp, isSupabase } = useAuth();
+  const { signUp, isSupabase, isAuthenticated, hydrated: authHydrated } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const isAddPgMode = searchParams.get("addPg") === "1";
 
-  // If already onboarded and not in add-PG mode, go to dashboard
+  // Wait for both contexts to hydrate before deciding where to send the user.
+  // If already onboarded:
+  //   - authenticated → dashboard
+  //   - NOT authenticated (session expired) → /login  ← key fix: NOT /demo
   useEffect(() => {
-    if (isOnboarded && !isAddPgMode) {
-      router.replace("/");
-    }
-  }, [isOnboarded, isAddPgMode, router]);
+    if (!authHydrated || !onboardingHydrated) return;
+    if (!isOnboarded || isAddPgMode) return;
+    router.replace(isAuthenticated ? "/" : "/login");
+  }, [authHydrated, onboardingHydrated, isOnboarded, isAddPgMode, isAuthenticated, router]);
 
   // In add-PG mode, skip to step 2
   const [step, setStep] = useState(isAddPgMode ? 1 : 0);
