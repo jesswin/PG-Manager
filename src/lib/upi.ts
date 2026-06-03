@@ -26,7 +26,11 @@ export function buildUpiPayPageUrl(opts: {
   upiName: string;
   pgName: string;
 }): string {
-  const base = typeof window !== "undefined" ? window.location.origin : "";
+  // Prefer NEXT_PUBLIC_APP_URL so links always point to the production site
+  // even when this function is called from localhost during development.
+  const base =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (typeof window !== "undefined" ? window.location.origin : "");
   const params = new URLSearchParams({
     name: opts.tenantName,
     room: opts.roomNumber,
