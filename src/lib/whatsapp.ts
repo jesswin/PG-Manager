@@ -4,6 +4,7 @@ export function whatsappUrl(phone: string, message: string): string {
   return `https://wa.me/${intl}?text=${encodeURIComponent(message)}`;
 }
 
+/** Plain reminder — no payment info at all. */
 export function rentReminderMessage(
   tenantName: string,
   roomNumber: string,
@@ -23,10 +24,10 @@ export function rentReminderMessage(
 }
 
 /**
- * Reminder message that includes:
- * 1. A tap-to-pay link (opens /pay page with UPI deep-link button)
- * 2. The raw UPI ID + amount as a manual fallback
- * This ensures tenants can always pay even if the link doesn't open.
+ * Reminder with UPI payment info.
+ * - paymentLink: optional — shows a tap-to-pay web link
+ * - upiId: optional — shows the raw UPI ID for direct payment
+ * At least one should be provided; both together give tenants two ways to pay.
  */
 export function rentReminderWithLink(
   tenantName: string,
@@ -40,13 +41,19 @@ export function rentReminderWithLink(
   const due = dueDate
     ? new Date(dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
     : "";
+
+  const linkSection = paymentLink
+    ? `\n\n👇 *Tap to pay:*\n${paymentLink}`
+    : "";
+
   const upiSection = upiId
     ? `\n\n💸 *Or pay directly via UPI:*\nUPI ID: *${upiId}*\nAmount: *₹${amount.toLocaleString("en-IN")}*\nRemarks: Room ${roomNumber} ${month}`
     : "";
+
   return (
     `Dear ${tenantName},\n\n` +
-    `Your rent of *₹${amount.toLocaleString("en-IN")}* for *${month}* (Room ${roomNumber}) is${due ? ` due on *${due}*` : " pending"}.\n\n` +
-    `👇 *Tap to pay instantly:*\n${paymentLink}` +
+    `Your rent of *₹${amount.toLocaleString("en-IN")}* for *${month}* (Room ${roomNumber}) is${due ? ` due on *${due}*` : " pending"}.` +
+    linkSection +
     upiSection +
     `\n\nThank you! 🙏\n— PG Manager`
   );

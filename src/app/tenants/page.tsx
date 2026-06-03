@@ -186,17 +186,21 @@ export default function TenantsPage() {
                       <Link href={`/tenants/${tenant.id}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors">
                         <Eye size={13} /> View
                       </Link>
-                      {can("whatsappIndividual") ? (
-                        <a href={whatsappUrl(tenant.phone, rentReminderMessage(tenant.name, tenant.roomNumber, tenant.rentAmount, currentMonth, ""))}
-                          target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors">
-                          <MessageCircle size={13} />
-                        </a>
-                      ) : (
-                        <button onClick={() => setUpgradeModal({ open: true, feature: "WhatsApp Reminders", plan: "monthly" })}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-400 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors">
-                          <Lock size={13} />
-                        </button>
+                      {/* Only show WhatsApp button for unpaid/partial tenants */}
+                      {tenant.paymentStatus !== "Paid" && (
+                        can("whatsappIndividual") ? (
+                          <a href={whatsappUrl(tenant.phone, rentReminderMessage(tenant.name, tenant.roomNumber, tenant.rentAmount, currentMonth, ""))}
+                            target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors"
+                            title="Send reminder">
+                            <MessageCircle size={13} />
+                          </a>
+                        ) : (
+                          <button onClick={() => setUpgradeModal({ open: true, feature: "WhatsApp Reminders", plan: "monthly" })}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-400 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors">
+                            <Lock size={13} />
+                          </button>
+                        )
                       )}
                       <button onClick={() => setEditTarget(tenant)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors">
                         <Pencil size={13} />

@@ -110,9 +110,13 @@ export default function DashboardPage() {
 
   function getReminderMsg(p: { tenantName: string; roomNumber: string; amount: number; month: string; dueDate: string }, t: { phone: string }) {
     const link = buildPayLink(p, t);
-    return link
-      ? rentReminderWithLink(p.tenantName, p.roomNumber, p.amount, p.month, link, p.dueDate, upi.upiId)
-      : rentReminderMessage(p.tenantName, p.roomNumber, p.amount, p.month, p.dueDate);
+    const upiIdValue = upi.upiId?.trim();
+    // Always use rentReminderWithLink when either a pay-page link OR a UPI ID is available.
+    // This way tenants get the UPI ID even if the full link couldn't be built.
+    if (link || upiIdValue) {
+      return rentReminderWithLink(p.tenantName, p.roomNumber, p.amount, p.month, link, p.dueDate, upiIdValue || undefined);
+    }
+    return rentReminderMessage(p.tenantName, p.roomNumber, p.amount, p.month, p.dueDate);
   }
 
   function sendAllReminders() {
