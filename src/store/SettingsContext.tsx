@@ -1,29 +1,24 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { supabase, isSupabaseEnabled } from "@/lib/supabase";
+import { useAuth } from "@/store/AuthContext";
 
 // ── UPI Configuration ─────────────────────────────────────────────────────────
-// Simple: owner just provides their UPI ID — no account/API setup needed.
 
 export interface UpiConfig {
-  upiId: string;    // e.g. "9876543210@paytm" or "business@icici"
-  upiName: string;  // display name tenants see when paying, e.g. "Sunshine PG"
+  upiId: string;
+  upiName: string;
   enabled: boolean;
 }
 
-const DEFAULT_UPI: UpiConfig = {
-  upiId: "",
-  upiName: "",
-  enabled: false,
-};
+const DEFAULT_UPI: UpiConfig = { upiId: "", upiName: "", enabled: false };
 
 // ── Notification Preferences ──────────────────────────────────────────────────
-// Emails and SMS are sent from the platform admin's account (env vars on server).
-// Owners only control WHEN reminders go out — not HOW they're sent.
 
 export interface NotificationPrefs {
-  autoSendEnabled: boolean;  // auto-send reminders on app open
-  daysBeforeDue: number;     // days before due date to send reminder
+  autoSendEnabled: boolean;
+  daysBeforeDue: number;
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -70,43 +65,109 @@ const SettingsContext = createContext<SettingsContextType>({
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
+  const { user, isAuthenticated } = useAuth();
+
   const [upi, setUpi]             = useState<UpiConfig>(DEFAULT_UPI);
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
   const [floors, setFloors]       = useState<string[]>(DEFAULT_FLOORS);
   const [roomTypes, setRoomTypes] = useState<string[]>(DEFAULT_ROOM_TYPES);
 
+  // ── Load settings ────────────────────────────────────────────────────────────
+
   useEffect(() => {
+    // Always load room config from localStorage (device-specific)
+    try {
+      const savedRoom = localStorage.getItem(ROOM_CONFIG_KEY);
+      if (savedRoom) {
+        const rc = JSON.parse(savedRoom);
+        if (Array.isArray(rc.floors) && rc.floors.length) setFloors(rc.floors);
+        if (Array.isArray(rc.roomTypes) && rc.roomTypes.length) setRoomTypes(rc.roomTypes);
+      }
+    } catch { /* ignore */ }
+
+    if (isSupabaseEnabled && supabase && isAuthenticated && user) {
+      // Load UPI + notif prefs from Supabase — synced across devices
+      loadFromSupabase(user.id);
+    } else {
+      // Local mode: read from localStorage
+      loadFromLocalStorage();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?.id]);
+
+  async function loadFromSupabase(userId: string) {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from("owner_settings")
+      .select("*")
+      .eq("owner_id", userId)
+      .maybeSingle();
+
+    if (data) {
+      setUpi({
+        upiId: data.upi_id ?? "",
+        upiName: data.upi_name ?? "",
+        enabled: !!(data.upi_id && data.upi_id.includes("@")),
+      });
+      setNotifPrefs({
+        autoSendEnabled: data.notif_auto_send ?? true,
+        daysBeforeDue: data.notif_days_before_due ?? 3,
+      });
+    } else {
+      // No DB row yet — check localStorage as migration fallback
+      loadFromLocalStorage(false);
+    }
+  }
+
+  function loadFromLocalStorage(setRoomConfigToo = true) {
     try {
       const savedUpi = localStorage.getItem("pgm_upi_config");
       if (savedUpi) setUpi({ ...DEFAULT_UPI, ...JSON.parse(savedUpi) });
 
       const savedNotif = localStorage.getItem("pgm_notif_prefs");
       if (savedNotif) setNotifPrefs({ ...DEFAULT_NOTIFICATION_PREFS, ...JSON.parse(savedNotif) });
-
-      const savedRoom = localStorage.getItem(ROOM_CONFIG_KEY);
-      if (savedRoom) {
-        const rc = JSON.parse(savedRoom);
-        if (Array.isArray(rc.floors) && rc.floors.length)    setFloors(rc.floors);
-        if (Array.isArray(rc.roomTypes) && rc.roomTypes.length) setRoomTypes(rc.roomTypes);
-      }
     } catch { /* ignore */ }
-  }, []);
+  }
+
+  // ── Update UPI ───────────────────────────────────────────────────────────────
 
   function updateUpi(cfg: Partial<UpiConfig>) {
     setUpi((prev) => {
-      const next = { ...prev, ...cfg };
+      const next = { ...prev, ...cfg, enabled: !!(cfg.upiId ?? prev.upiId)?.includes("@") };
+      // Always save to localStorage as offline backup
       localStorage.setItem("pgm_upi_config", JSON.stringify(next));
+      // Save to Supabase (persists across devices/deployments)
+      if (supabase && user) {
+        supabase.from("owner_settings").upsert({
+          owner_id: user.id,
+          upi_id: next.upiId,
+          upi_name: next.upiName,
+          updated_at: new Date().toISOString(),
+        }).then(() => {}, () => {});
+      }
       return next;
     });
   }
+
+  // ── Update notification prefs ─────────────────────────────────────────────────
 
   function updateNotifPrefs(prefs: Partial<NotificationPrefs>) {
     setNotifPrefs((prev) => {
       const next = { ...prev, ...prefs };
       localStorage.setItem("pgm_notif_prefs", JSON.stringify(next));
+      if (supabase && user) {
+        supabase.from("owner_settings").upsert({
+          owner_id: user.id,
+          notif_auto_send: next.autoSendEnabled,
+          notif_days_before_due: next.daysBeforeDue,
+          updated_at: new Date().toISOString(),
+        }).then(() => {}, () => {});
+      }
       return next;
     });
   }
+
+  // ── Room config (localStorage only — device preference) ────────────────────
 
   function saveRoomConfig(f: string[], t: string[]) {
     try { localStorage.setItem(ROOM_CONFIG_KEY, JSON.stringify({ floors: f, roomTypes: t })); } catch { /* ignore */ }
@@ -133,7 +194,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setRoomTypes(next); saveRoomConfig(floors, next);
   }
 
-  // A valid UPI VPA (contains @) is all that's needed — no separate 'enabled' flag required.
   const isUpiConfigured = upi.upiId.trim().length > 3 && upi.upiId.includes("@");
 
   return (

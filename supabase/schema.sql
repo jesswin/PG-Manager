@@ -113,6 +113,19 @@ CREATE POLICY "owner_tenants"   ON tenants  FOR ALL USING (pg_id IN (SELECT id F
 CREATE POLICY "owner_payments"  ON payments FOR ALL USING (pg_id IN (SELECT id FROM pgs WHERE owner_id = auth.uid()));
 CREATE POLICY "owner_notices"   ON notices  FOR ALL USING (pg_id IN (SELECT id FROM pgs WHERE owner_id = auth.uid()));
 
+-- ── Owner Settings (UPI + notification prefs) ────────────────────────────────
+CREATE TABLE IF NOT EXISTS owner_settings (
+  owner_id              UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  upi_id                TEXT NOT NULL DEFAULT '',
+  upi_name              TEXT NOT NULL DEFAULT '',
+  notif_auto_send       BOOLEAN NOT NULL DEFAULT TRUE,
+  notif_days_before_due INTEGER NOT NULL DEFAULT 3,
+  updated_at            TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE owner_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "owner_settings" ON owner_settings FOR ALL USING (owner_id = auth.uid());
+
 -- ============================================================
 -- Auto-create profile on signup
 -- ============================================================
