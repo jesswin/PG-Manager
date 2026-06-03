@@ -45,6 +45,8 @@ interface AuthContextType {
   /** Legacy helper (still used by onboarding in local mode) */
   setPassword: (password: string) => Promise<void>;
   changePassword: (oldPass: string, newPass: string) => Promise<boolean>;
+  /** Send a password-reset email (Supabase only) */
+  resetPassword: (email: string) => Promise<{ error: string | null }>;
   exitDemo: () => void;
 }
 
@@ -169,6 +171,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Exit demo ─────────────────────────────────────────────────────────────
 
+  const resetPassword = useCallback(async (email: string): Promise<{ error: string | null }> => {
+    if (!supabase) return { error: "Password reset via email requires Supabase to be configured." };
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    return { error: error?.message ?? null };
+  }, []);
+
   const exitDemo = useCallback(() => {
     _exitDemo();
     setDemoMode(false);
@@ -181,7 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, isAuthenticated, hasPassword, hydrated, demoMode,
       isSupabase: isSupabaseEnabled,
-      login, logout, signUp, setPassword, changePassword, exitDemo,
+      login, logout, signUp, setPassword, changePassword, resetPassword, exitDemo,
     }}>
       {children}
     </AuthContext.Provider>

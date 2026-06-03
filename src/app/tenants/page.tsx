@@ -44,10 +44,14 @@ export default function TenantsPage() {
 
   const vacantRooms = rooms.filter((r) => r.status === "Vacant");
 
-  const roomsForEdit = (t: Tenant) => [
-    ...vacantRooms,
-    ...rooms.filter((r) => r.tenantId === t.id),
-  ];
+  // For editing: include the tenant's current room by room number (reliable fallback
+  // if tenantId isn't set on the room object) PLUS all vacant rooms.
+  const roomsForEdit = (t: Tenant) => {
+    const currentRoom = rooms.find((r) => r.number === t.roomNumber);
+    const alreadyInVacant = vacantRooms.some((v) => v.number === t.roomNumber);
+    const extras = currentRoom && !alreadyInVacant ? [currentRoom] : [];
+    return [...extras, ...vacantRooms];
+  };
 
   // Split active vs moved-out
   const activeTenants = tenants.filter((t) => (t.tenantStatus ?? "Active") === "Active");

@@ -46,6 +46,12 @@ interface Props {
 export default function TenantOnboardingForm({ vacantRooms, initial, onSubmit, onCancel, submitLabel = "Add Tenant" }: Props) {
   const [form, setForm] = useState<TenantFormData>({ ...EMPTY, ...initial });
 
+  // Always ensure the currently assigned room appears as an option (edit mode safety net)
+  const alreadyInList = vacantRooms.some((r) => r.number === form.roomNumber);
+  const allRoomOptions = (!alreadyInList && form.roomNumber)
+    ? [{ id: "current", number: form.roomNumber, floor: "", type: "Current", status: "Occupied" as const, rentAmount: form.rentAmount, amenities: [] }, ...vacantRooms]
+    : vacantRooms;
+
   function set<K extends keyof TenantFormData>(key: K, value: TenantFormData[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
@@ -100,14 +106,15 @@ export default function TenantOnboardingForm({ vacantRooms, initial, onSubmit, o
             <label className={label}>Room *</label>
             <select required className={inp} value={form.roomNumber}
               onChange={(e) => {
-                const room = vacantRooms.find((r) => r.number === e.target.value);
+                const room = allRoomOptions.find((r) => r.number === e.target.value);
                 set("roomNumber", e.target.value);
                 if (room) set("rentAmount", room.rentAmount);
               }}>
               <option value="">Select room…</option>
-              {vacantRooms.map((r) => (
+              {allRoomOptions.map((r) => (
                 <option key={r.id} value={r.number}>
-                  Room {r.number} – Floor {r.floor} ({r.type})
+                  Room {r.number} – {r.floor}{r.type ? ` (${r.type})` : ""}
+                  {r.status === "Occupied" && r.number === form.roomNumber ? " – Current" : ""}
                 </option>
               ))}
             </select>

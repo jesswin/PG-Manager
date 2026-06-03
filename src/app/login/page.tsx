@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/store/AuthContext";
-import { Building2, Eye, EyeOff, Lock, AlertCircle, Mail } from "lucide-react";
+import { Building2, Eye, EyeOff, Lock, AlertCircle, Mail, CheckCircle2 } from "lucide-react";
 
 export default function LoginPage() {
-  const { isAuthenticated, hasPassword, hydrated, isSupabase, login } = useAuth();
+  const { isAuthenticated, hasPassword, hydrated, isSupabase, login, resetPassword } = useAuth();
   const router = useRouter();
 
   const [email, setEmail]       = useState("");
@@ -15,7 +15,14 @@ export default function LoginPage() {
   const [showPwd, setShowPwd]   = useState(false);
   const [error, setError]       = useState("");
   const [loading, setLoading]   = useState(false);
-  const [showReset, setShowReset] = useState(false);
+
+  // Forgot password state
+  const [showForgot, setShowForgot]         = useState(false);
+  const [resetEmail, setResetEmail]         = useState("");
+  const [resetSent, setResetSent]           = useState(false);
+  const [resetLoading, setResetLoading]     = useState(false);
+  const [resetError, setResetError]         = useState("");
+  const [showLocalReset, setShowLocalReset] = useState(false);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -37,7 +44,20 @@ export default function LoginPage() {
     }
   }
 
-  function handleResetAll() {
+  async function handleResetEmail(e: React.SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setResetLoading(true);
+    setResetError("");
+    const { error: err } = await resetPassword(resetEmail);
+    setResetLoading(false);
+    if (err) {
+      setResetError(err);
+    } else {
+      setResetSent(true);
+    }
+  }
+
+  function handleLocalReset() {
     if (!confirm("This will permanently delete all your PG Manager data. Are you sure?")) return;
     localStorage.clear();
     sessionStorage.clear();
@@ -64,7 +84,7 @@ export default function LoginPage() {
           <p className="text-sm text-gray-500 mt-1">Sign in to continue</p>
         </div>
 
-        {/* Card */}
+        {/* ── Login card ─────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
           <div className="flex items-center gap-2 mb-6">
             <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center">
@@ -79,17 +99,12 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email — shown when Supabase is enabled */}
             {isSupabase && (
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">Email</label>
                 <div className="relative">
                   <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    autoFocus
-                    required
-                    type="email"
-                    value={email}
+                  <input autoFocus required type="email" value={email}
                     onChange={(e) => { setEmail(e.target.value); setError(""); }}
                     placeholder="you@email.com"
                     className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-800 placeholder:text-gray-400"
@@ -101,11 +116,8 @@ export default function LoginPage() {
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">Password</label>
               <div className="relative">
-                <input
-                  autoFocus={!isSupabase}
-                  required
-                  type={showPwd ? "text" : "password"}
-                  value={password}
+                <input autoFocus={!isSupabase} required
+                  type={showPwd ? "text" : "password"} value={password}
                   onChange={(e) => { setPassword(e.target.value); setError(""); }}
                   placeholder="Enter your password"
                   className="w-full px-3 py-2.5 pr-10 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-800 placeholder:text-gray-400"
@@ -135,23 +147,70 @@ export default function LoginPage() {
           </form>
         </div>
 
-        {/* Forgot */}
-        <div className="mt-4 text-center">
-          <button onClick={() => setShowReset((v) => !v)} className="text-xs text-gray-400 hover:text-gray-600 underline">
+        {/* ── Forgot password ─────────────────────────────────── */}
+        <div className="mt-4">
+          <button onClick={() => { setShowForgot((v) => !v); setResetSent(false); setResetError(""); }}
+            className="w-full text-center text-xs text-gray-400 hover:text-gray-600 underline">
             Forgot password?
           </button>
-          {showReset && (
-            <div className="mt-3 p-4 bg-red-50 border border-red-200 rounded-xl text-left">
-              <p className="text-xs text-red-700 font-semibold mb-1">Reset all data</p>
-              <p className="text-xs text-red-600 mb-3 leading-relaxed">
-                {isSupabase
-                  ? "Use the 'Forgot password' email link from Supabase, or reset your device data below."
-                  : "This will permanently erase all tenants, rooms, payments, and settings stored in this browser."}
-              </p>
-              <button onClick={handleResetAll}
-                className="px-4 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600 transition-colors">
-                Erase local data & start over
-              </button>
+
+          {showForgot && (
+            <div className="mt-3 bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
+              {/* Supabase: send reset email */}
+              {isSupabase && (
+                <>
+                  <p className="text-xs font-semibold text-gray-700">Reset via email</p>
+                  {resetSent ? (
+                    <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 px-3 py-2.5 rounded-xl border border-emerald-200">
+                      <CheckCircle2 size={15} className="shrink-0" />
+                      Reset email sent to <strong>{resetEmail}</strong>. Check your inbox.
+                    </div>
+                  ) : (
+                    <form onSubmit={handleResetEmail} className="space-y-3">
+                      <div className="relative">
+                        <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input required type="email" value={resetEmail}
+                          onChange={(e) => { setResetEmail(e.target.value); setResetError(""); }}
+                          placeholder="your-email@example.com"
+                          className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-800 placeholder:text-gray-400"
+                        />
+                      </div>
+                      {resetError && (
+                        <p className="text-xs text-red-600 flex items-center gap-1">
+                          <AlertCircle size={11} /> {resetError}
+                        </p>
+                      )}
+                      <button type="submit" disabled={resetLoading}
+                        className="w-full py-2 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors">
+                        {resetLoading ? "Sending…" : "Send Reset Email"}
+                      </button>
+                    </form>
+                  )}
+                  <div className="border-t border-gray-100 pt-3">
+                    <button onClick={() => setShowLocalReset((v) => !v)}
+                      className="text-xs text-gray-400 hover:text-red-500 underline">
+                      Can't access email? Erase all local data
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Local mode OR expanded local reset */}
+              {(!isSupabase || showLocalReset) && (
+                <div className={isSupabase ? "" : ""}>
+                  {!isSupabase && <p className="text-xs font-semibold text-gray-700 mb-2">Reset account</p>}
+                  <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl">
+                    <p className="text-xs text-red-700 font-semibold mb-1">Erase all data & start over</p>
+                    <p className="text-xs text-red-600 mb-3 leading-relaxed">
+                      This permanently deletes all tenants, rooms, payments, and settings in this browser.
+                    </p>
+                    <button onClick={handleLocalReset}
+                      className="px-4 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600 transition-colors">
+                      Erase everything & start over
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
