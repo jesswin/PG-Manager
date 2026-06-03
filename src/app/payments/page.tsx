@@ -94,7 +94,15 @@ export default function PaymentsPage() {
       upiId: upi.upiId, upiName: upi.upiName || "PG Manager",
       pgName: upi.upiName || "PG Manager",
     });
-    const msg = `Hi ${p.tenantName.split(" ")[0]}, your rent for *${p.month}* (Room ${p.roomNumber}) of *₹${p.amount.toLocaleString("en-IN")}* is due.\n\nPay via UPI: ${link}`;
+    const msg =
+      `Dear ${p.tenantName.split(" ")[0]},\n\n` +
+      `Your rent of *₹${p.amount.toLocaleString("en-IN")}* for *${p.month}* (Room ${p.roomNumber}) is due.\n\n` +
+      `👇 *Tap to pay:*\n${link}\n\n` +
+      `💸 *Or pay directly via UPI:*\n` +
+      `UPI ID: *${upi.upiId}*\n` +
+      `Amount: *₹${p.amount.toLocaleString("en-IN")}*\n` +
+      `Remarks: Room ${p.roomNumber} ${p.month}\n\n` +
+      `Thank you! 🙏\n— PG Manager`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   }
 

@@ -92,7 +92,7 @@ function PaymentContent() {
           Open UPI App to Pay
         </a>
         <p className="text-center text-xs text-gray-400 mb-5">
-          Works with GPay, PhonePe, Paytm, BHIM, and all UPI apps
+          Opens GPay, PhonePe, Paytm, BHIM or any UPI app installed on your phone
         </p>
 
         {/* Manual UPI ID */}
