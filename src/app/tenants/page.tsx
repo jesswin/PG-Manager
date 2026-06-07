@@ -17,15 +17,20 @@ import {
   Search, UserPlus, Eye, Pencil, Trash2, ChevronDown, X,
   MessageCircle, Lock, LogOut, ChevronRight, History,
 } from "lucide-react";
-import { whatsappUrl, rentReminderMessage } from "@/lib/whatsapp";
+import { whatsappUrl, rentReminderMessage, rentReminderWithLink } from "@/lib/whatsapp";
+import { buildUpiPayPageUrl } from "@/lib/upi";
 import { getCurrentMonthLabel } from "@/lib/months";
 import { usePlan } from "@/store/PlanContext";
 import UpgradeModal from "@/components/UpgradeModal";
+import { useSettings } from "@/store/SettingsContext";
+import { useOnboarding } from "@/store/OnboardingContext";
 
 export default function TenantsPage() {
   const { tenants, rooms, addTenant, editTenant, deleteTenant, moveOutTenant } = useApp();
   const { toasts, addToast, dismiss } = useToast();
   const { can } = usePlan();
+  const { upi, isUpiConfigured } = useSettings();
+  const { activePg } = useOnboarding();
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; feature: string; plan: "monthly" | "quarterly" }>({ open: false, feature: "", plan: "monthly" });
   const searchParams = useSearchParams();
 
@@ -98,6 +103,19 @@ export default function TenantsPage() {
   }
 
   const currentMonth = getCurrentMonthLabel();
+
+  function getTenantReminderMsg(tenant: Tenant): string {
+    if (isUpiConfigured) {
+      const link = buildUpiPayPageUrl({
+        tenantName: tenant.name, roomNumber: tenant.roomNumber,
+        amount: tenant.rentAmount, month: currentMonth, phone: tenant.phone,
+        upiId: upi.upiId, upiName: upi.upiName || activePg?.name || "PGNest",
+        pgName: activePg?.name || "PGNest",
+      });
+      return rentReminderWithLink(tenant.name, tenant.roomNumber, tenant.rentAmount, currentMonth, link, "", upi.upiId);
+    }
+    return rentReminderMessage(tenant.name, tenant.roomNumber, tenant.rentAmount, currentMonth, "");
+  }
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
@@ -189,7 +207,7 @@ export default function TenantsPage() {
                       {/* Only show WhatsApp button for unpaid/partial tenants */}
                       {tenant.paymentStatus !== "Paid" && (
                         can("whatsappIndividual") ? (
-                          <a href={whatsappUrl(tenant.phone, rentReminderMessage(tenant.name, tenant.roomNumber, tenant.rentAmount, currentMonth, ""))}
+                          <a href={whatsappUrl(tenant.phone, getTenantReminderMsg(tenant))}
                             target="_blank" rel="noopener noreferrer"
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors"
                             title="Send reminder">
